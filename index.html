@@ -206,50 +206,66 @@ function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
 
 function allItems(){ return INDEX.flatMap(cat => (DATA[cat]?.items)||[]); }
 
-/************ FETCH ************/
-async function fetchCatalog(){
-  try{
-    const res = await fetch(`${PRODUCTS_URL}?grouped=true`, { cache:'no-store' });
-    const json = await res.json();
-    // Si la API devuelve objeto agrupado:
-    if(json && typeof json === 'object' && !Array.isArray(json)){
-      DATA = json;
-      INDEX = Object.keys(DATA);
-      return;
-    }
-    // Si por algún motivo devuelve array plano, lo agrupamos
-    if(Array.isArray(json)){
-      DATA = {};
-      json.forEach(p=>{
-        const cat = p.category || 'Sin categoría';
-        (DATA[cat] ||= { cover:'', items:[] }).items.push(p);
-      });
-      INDEX = Object.keys(DATA);
-      return;
-    }
-    throw new Error('Formato de API inesperado');
-  }catch(e){
-    console.error('Error fetching catalog', e);
-    // Fallback mínimo sin datos remotos
-    DATA = {};
-    INDEX = [];
-  }
+function normalizeImageUrl(u, size=800){
+  if(!u) return "";
+  if(u.includes("drive.google.com/thumbnail")) return u;
+  const m = u.match(/[?&]id=([A-Za-z0-9_-]+)/) || u.match(/\/d\/([A-Za-z0-9_-]+)/);
+  const id = m ? m[1] : null;
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${size}` : u;
 }
 
+function sanitizeCatalog(data){
+  const out = {};
+  Object.keys(data || {}).forEach(cat=>{
+    const block = data[cat] || {};
+    const items = Array.isArray(block.items) ? [...block.items] : [];
+
+    // buscar sentinela
+    const idx = items.findIndex(p =>
+      String(p?.name||'').trim().toLowerCase() === 'categoryimage' ||
+      String(p?.id||'').trim().toLowerCase() === '_cover'
+    );
+
+    if (idx >= 0) {
+      const raw = items[idx].imageUrl || '';
+      block.cover = normalizeImageUrl(raw);   // ← 1) NORMALIZO COVER
+      items.splice(idx, 1);                   // sacar el sentinela del listado
+    }
+
+    // si ya venía cover desde el backend, también lo normalizo
+    if (block.cover) block.cover = normalizeImageUrl(block.cover);
+
+    block.items = items;
+    out[cat] = block;
+  });
+  return out;
+}
+
+
+/************ FETCH ************/
 async function fetchCatalogFast(){
-  // 1) mostrar cache local si existe
-  const cached = localStorage.getItem('catalog_grouped_v2');
-  if (cached) {
-    DATA = JSON.parse(cached);
-    INDEX = Object.keys(DATA);
-    renderHomeCats(); renderCategories();
+  // migración de cache (solo 1 vez por navegador)
+  if (!localStorage.getItem('catalog_migrated_to_v3')) {
+    ['catalog_grouped_v1','catalog_grouped_v2'].forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('catalog_migrated_to_v3', '1');
   }
-  // 2) pedir al backend y actualizar cuando llegue
-  const res = await fetch(`${PRODUCTS_URL}?grouped=true`); // podés sacar 'no-store'
+
+  // 1) cache local (sanitizado)
+  const cached = localStorage.getItem('catalog_grouped_v3');
+  if (cached) {
+    try {
+      DATA = sanitizeCatalog(JSON.parse(cached));
+      INDEX = Object.keys(DATA);
+      renderHomeCats(); renderCategories();
+    } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
+  }
+
+  // 2) pedir fresco (con bust) y guardar SANITIZADO
+  const res = await fetch(`${PRODUCTS_URL}?grouped=true&bust=${Date.now()}`, { cache:'no-store' });
   const fresh = await res.json();
-  DATA = fresh; INDEX = Object.keys(DATA);
-  localStorage.setItem('catalog_grouped_v2', JSON.stringify(fresh));
-  // refrescar vista actual
+  DATA = sanitizeCatalog(fresh);
+  INDEX = Object.keys(DATA);
+  localStorage.setItem('catalog_grouped_v3', JSON.stringify(DATA)); // ← guardamos el SANITIZADO
   if (state.view === 'home') renderHomeCats(); else renderGrid();
 }
 
@@ -282,7 +298,12 @@ function renderHomeCats(){
   host.innerHTML = '';
   INDEX.forEach(cat=>{
     const block = DATA[cat] || {cover:'', items:[]};
-    const cover = block.cover || block.items.find(x=>x.imageUrl)?.imageUrl || '';
+    let cover = normalizeImageUrl(block.cover || '');
+    // fallback por si no hay portada aún
+    if (!cover) {
+      const alt = (block.items.find(x=>x.imageUrl) || {}).imageUrl || '';
+      cover = normalizeImageUrl(alt);
+    }
     const card = document.createElement('div');
     card.className = 'catcard';
     card.innerHTML = `
@@ -303,10 +324,7 @@ function renderHomeCats(){
     };
     host.appendChild(card);
   });
-
-  if(!INDEX.length){
-    host.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`;
-  }
+  if(!INDEX.length){ host.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`; }
 }
 
 /************ LISTADO DE PRODUCTOS ************/
@@ -331,8 +349,9 @@ function renderGrid(){
     card.className = 'card';
 
     const thumb = document.createElement('div');
-    thumb.className = 'thumb' + (p.imageUrl ? ' hasimg' : '');
-    if(p.imageUrl) thumb.style.backgroundImage = `url('${p.imageUrl}')`;
+    const img = normalizeImageUrl(p.imageUrl);
+    thumb.className = 'thumb' + (img ? ' hasimg' : '');
+    if(img) thumb.style.backgroundImage = `url('${img}')`;
     else thumb.textContent = '🛍️';
 
     const content = document.createElement('div');
