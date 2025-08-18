@@ -112,6 +112,50 @@
     @media (min-width: 768px){
       .fab{ position:fixed; right:18px; bottom:18px; z-index:30; }
     }
+    #closeCartBtn {
+      flex: none;
+      padding: 12px 22px;
+      border-radius: 30px;
+    }
+
+    /* === Controles iOS-friendly (evita selects "aplastados") === */
+    /* 1) Tamaño mínimo táctil y tipografía (evita el zoom en iOS) */
+    select, .select,
+    input[type="number"], input[type="text"], input[type="search"], textarea {
+      font-size: 16px;        /* ≥16px evita zoom en Safari iOS */
+      line-height: 1.35;      /* previene clipping vertical */
+      min-height: 44px;       /* target táctil recomendado por Apple */
+      padding: 12px 14px;     /* un poquito más de aire */
+      border-radius: 12px;    /* mantener look & feel */
+    }
+
+    /* 2) Select con flecha propia y más padding derecho */
+    select, .select {
+      -webkit-appearance: none;
+      appearance: none;
+      padding-right: 42px; /* espacio para la flecha */
+      background-image: url('data:image/svg+xml;utf8,\
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cbd5e1"><path d="M7 10l5 5 5-5"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 16px 16px;
+    }
+
+    /* 3) Afinado en mobile: un pelín más de aire si hace falta */
+    @media (max-width: 767px){
+      .row-s select, .row-s .select {
+        min-height: 46px;
+        padding: 12px 46px 12px 14px; /* más espacio a la derecha */
+      }
+    }
+
+    /* 4) (Opcional) Estilo de foco más visible */
+    select:focus, .select:focus,
+    input:focus, textarea:focus {
+      outline: 2px solid rgba(34,197,94,.55);
+      outline-offset: 2px;
+    }
+
   </style>
 </head>
 <body>
