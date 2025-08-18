@@ -1,0 +1,28 @@
+# macOS hidden files
+.DS_Store
+.Apple*
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+# Dependency directories (if you add Node.js later)
+node_modules/
+# Build outputs
+/dist
+/build
+# Environment variables
+.env
+# Temp files
+*.tmp
+*.temp
+# Coverage directory
+coverage
+# Optional: Ignore images if they are large/generated, but uncomment if needed
+# imgs/

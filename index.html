@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dietética — Pedido por WhatsApp</title>
+  <meta name="description" content="Catálogo simple con carrito y pedido por WhatsApp. HTML, CSS y JS puros." />
+  <style>
+    :root{
+      --bg:#0f172a;           /* slate-900 */
+      --panel:#111827;        /* gray-900 */
+      --soft:#1f2937;         /* gray-800 */
+      --muted:#9ca3af;        /* gray-400 */
+      --text:#f8fafc;         /* slate-50 */
+      --accent:#22c55e;       /* green-500 */
+      --accent-2:#06b6d4;     /* cyan-500 */
+      --danger:#ef4444;       /* red-500 */
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      background: radial-gradient(1200px 600px at 70% -10%, #0b1024 0%, var(--bg) 60%);
+      color:var(--text);
+      min-height:100dvh;
+    }
+    header{
+      position:sticky; top:0; z-index:20;
+      backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(17,24,39,.9), rgba(17,24,39,.6));
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .container{max-width:1120px; margin:0 auto; padding:18px 16px;}
+    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    .brand{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; letter-spacing:.3px}
+    .brand i{width:28px; height:28px; border-radius:8px; display:inline-grid; place-items:center; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow: var(--shadow);}
+
+    .search{flex:1; min-width:220px; display:flex; gap:8px}
+    .search input{flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:#0b1224; color:var(--text)}
+    .search input::placeholder{color:#94a3b8}
+
+    .pillbar{display:flex; gap:8px; overflow:auto; scrollbar-width:none; padding:8px 0 4px}
+    .pill{white-space:nowrap; padding:8px 12px; border-radius:999px; background:#0b1224; border:1px solid rgba(255,255,255,.06); color:#cbd5e1; cursor:pointer; font-size:14px}
+    .pill.active{background:linear-gradient(135deg, rgba(34,197,94,.18), rgba(6,182,212,.18)); color:#e2e8f0; border-color:rgba(34,197,94,.35)}
+
+    main{padding:20px 16px 120px}
+    .grid{max-width:1120px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) ); gap:16px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); box-shadow: var(--shadow); display:flex; flex-direction:column; overflow:hidden}
+    .thumb{aspect-ratio: 4/3; background:#0b1224; display:grid; place-items:center; font-size:46px}
+    .thumb.hasimg{background-size:cover; background-position:center; font-size:0}
+    .content{padding:14px}
+    .title{font-weight:700; font-size:16px; line-height:1.2; margin:0 0 6px}
+    .desc{color:var(--muted); font-size:13px; min-height:34px}
+    .muted{color:#94a3b8; font-size:12px}
+    .row-s{display:flex; gap:8px; align-items:center; justify-content:space-between}
+    select, button, input[type="number"], textarea{background:#0b1224; color:var(--text); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:10px 12px}
+    select{width:100%}
+    .price{font-weight:800}
+    .actions{display:flex; gap:8px; margin-top:10px}
+    .btn{flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:#0b1224; color:var(--text); cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#08241a; font-weight:800; border:none}
+
+    /* Floating cart button */
+    .fab{
+      position:fixed; right:18px; bottom:18px; z-index:30; display:flex; align-items:center; gap:10px;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#06281e; border:none; border-radius:999px; padding:12px 16px; font-weight:800; box-shadow: var(--shadow); cursor:pointer
+    }
+    .badge{background:#06131b; color:#e2e8f0; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.18)}
+
+    /* Cart drawer */
+    .drawer{position:fixed; top:0; right:0; bottom:0; width:380px; max-width:100vw; background:var(--panel); border-left:1px solid rgba(255,255,255,.08); transform: translateX(100%); transition:transform .28s ease; z-index:40; display:flex; flex-direction:column}
+    .drawer.open{transform: translateX(0)}
+    .drawer header{position:sticky; top:0; background:rgba(17,24,39,.98); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,.08)}
+    .drawer main{flex:1; overflow:auto; padding:12px 12px 140px}
+    .line{display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; padding:12px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,.02); border-radius:14px; margin-bottom:10px}
+    .qty{display:flex; align-items:center; gap:6px}
+    .qty button{width:28px; height:28px; border-radius:8px}
+    .remove{background:transparent; color:#fda4af; border:none; cursor:pointer}
+
+    .totals{position:fixed; right:0; bottom:0; width:380px; max-width:100vw; background:rgba(17,24,39,.98); border-top:1px solid rgba(255,255,255,.08); padding:12px; display:grid; gap:10px; z-index:50}
+    .totals .row{justify-content:space-between}
+    .notes{width:100%; min-height:72px}
+    .select{width:100%}
+    .cta{display:flex; gap:8px}
+
+    footer{opacity:.7; text-align:center; padding:26px; font-size:12px}
+    a{color:#a5f3fc}
+
+    /* Home de categorías */
+    .catsgrid{max-width:1120px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fill, minmax(240px, 1fr) ); gap:16px}
+    .catcard{background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08); border-radius:var(--radius); box-shadow: var(--shadow); padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer}
+    .catcard .left{display:flex; align-items:center; gap:12px}
+    .catcard .emoji{font-size:28px; width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:#0b1224; border:1px solid rgba(255,255,255,.06)}
+    .catcard .catimg{width:56px; height:56px; border-radius:12px; background:#0b1224 center/cover no-repeat; border:1px solid rgba(255,255,255,.06)}
+    .catcard .name{font-weight:800}
+    .catcard .count{color:#94a3b8; font-size:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="row">
+        <div class="brand"><i>🥜</i> <span id="storeName">Dietética</span></div>
+        <div class="search">
+          <input id="searchInput" type="search" placeholder="Buscar: almendras, nuez, sin TACC…" />
+        </div>
+        <button class="fab" id="openCartBtn" aria-label="Abrir carrito">🛒 <span class="badge" id="cartCount">0</span></button>
+      </div>
+      <div class="pillbar" id="catBar"></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Home: mosaico de categorías -->
+    <section id="homeCats">
+      <div class="container">
+        <h2 style="margin:8px 0 12px">Explorá por categoría</h2>
+        <div class="catsgrid" id="catsGrid"></div>
+      </div>
+    </section>
+
+    <!-- Listado de productos dentro de una categoría -->
+    <section id="productList" style="display:none">
+      <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
+        <button class="btn" id="backBtn">← Todas las categorías</button>
+        <div class="muted" id="catTitle"></div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+  </main>
+
+  <!-- Drawer del carrito -->
+  <aside class="drawer" id="drawer">
+    <header>
+      <strong>Tu carrito</strong>
+      <button class="btn" id="closeCartBtn">✕</button>
+    </header>
+    <main>
+      <div id="cartLines"></div>
+
+      <h4>Datos para el pedido</h4>
+      <div class="line" style="grid-template-columns:1fr;">
+        <input id="custName" placeholder="Tu nombre" />
+        <input id="custArea" placeholder="Barrio / Localidad" style="margin-top:8px" />
+        <input id="custAddress" placeholder="Dirección (opcional)" style="margin-top:8px" />
+      </div>
+
+      <div class="line" style="grid-template-columns:1fr;">
+        <select id="shippingSelect" class="select"></select>
+        <textarea id="notes" class="notes" placeholder="Observaciones (horario, cambios, sin sal, etc.)"></textarea>
+      </div>
+    </main>
+
+    <div class="totals">
+      <div class="row"><span>Subtotal</span><strong id="subtotal">$0</strong></div>
+      <div class="row"><span>Envío</span><strong id="shippingCost">$0</strong></div>
+      <div class="row"><span>Total</span><strong id="grandTotal">$0</strong></div>
+      <div class="cta">
+        <button class="btn" id="clearBtn">Vaciar</button>
+        <button class="btn primary" id="whatsBtn">Enviar por WhatsApp</button>
+      </div>
+    </div>
+  </aside>
+
+  <footer>
+    Hecho con ❤️ en HTML + JS puros. Editá <em>PRODUCTS_URL</em> y <em>STORE</em> en el script.
+  </footer>
+
+<script>
+/************ CONFIG ************/
+const STORE = {
+  name: 'Nimú - Tienda Consciente',
+  phone: '5491123965312', // Formato internacional sin + ni guiones. Ej: 5491155555555
+  currency: 'ARS',
+  freeShippingMin: 30000, // umbral envío gratis (opcional)
+  shippingOptions: [
+    { id:'retiro', label:'Retiro en local (sin costo)', price:0 },
+    { id:'caba', label:'Envío CABA', price:2500 },
+    { id:'amba', label:'Envío AMBA', price:3500 }
+  ]
+};
+
+// TU endpoint de Apps Script (termina en /exec)
+const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbwTEnMabl0MddHbKtcdG3gjLxd3QSDYGW1hvKiM-Tgblz3DbOHHtCUsTfKiKRmoUywu/exec';
+
+/************ DATA desde backend (grouped=true) ************/
+let DATA = {};        // { "Frutos Secos": { cover, items:[{id,name,imageUrl,description,variants,category}...] }, ... }
+let INDEX = [];       // ['Frutos Secos','Harinas',...]
+let state = {
+  view: 'home',       // 'home' | 'products'
+  category: null,     // null| 'Frutos Secos' | 'Todo'
+  search: '',
+  cart: loadCart(),
+  shipping: STORE.shippingOptions[0].id
+};
+
+/************ UTIL ************/
+const fmt = new Intl.NumberFormat('es-AR', { style:'currency', currency: STORE.currency });
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const encode = s => encodeURIComponent(s);
+
+function loadCart(){ try{ return JSON.parse(localStorage.getItem('cart')) || []; } catch { return []; } }
+function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
+
+function allItems(){ return INDEX.flatMap(cat => (DATA[cat]?.items)||[]); }
+
+/************ FETCH ************/
+async function fetchCatalog(){
+  try{
+    const res = await fetch(`${PRODUCTS_URL}?grouped=true`, { cache:'no-store' });
+    const json = await res.json();
+    // Si la API devuelve objeto agrupado:
+    if(json && typeof json === 'object' && !Array.isArray(json)){
+      DATA = json;
+      INDEX = Object.keys(DATA);
+      return;
+    }
+    // Si por algún motivo devuelve array plano, lo agrupamos
+    if(Array.isArray(json)){
+      DATA = {};
+      json.forEach(p=>{
+        const cat = p.category || 'Sin categoría';
+        (DATA[cat] ||= { cover:'', items:[] }).items.push(p);
+      });
+      INDEX = Object.keys(DATA);
+      return;
+    }
+    throw new Error('Formato de API inesperado');
+  }catch(e){
+    console.error('Error fetching catalog', e);
+    // Fallback mínimo sin datos remotos
+    DATA = {};
+    INDEX = [];
+  }
+}
+
+/************ UI: CATEGORÍAS (píldoras) ************/
+function renderCategories(){
+  const bar = $('#catBar');
+  bar.innerHTML = '';
+  if(state.view !== 'products'){ bar.style.display = 'none'; return; }
+
+  const cats = ['Todo', ...INDEX];
+  cats.forEach(c=>{
+    const b = document.createElement('button');
+    b.className = 'pill' + ((state.category===c)?' active':'');
+    b.textContent = c;
+    b.onclick = ()=>{
+      state.category = c;
+      $('#catTitle').textContent = (c==='Todo') ? '' : c;
+      renderGrid();
+      highlightCat();
+    };
+    bar.appendChild(b);
+  });
+  bar.style.display = 'flex';
+}
+function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('active', el.textContent===state.category); }); }
+
+/************ HOME: MOSAICO DE CATEGORÍAS ************/
+function renderHomeCats(){
+  const host = $('#catsGrid');
+  host.innerHTML = '';
+  INDEX.forEach(cat=>{
+    const block = DATA[cat] || {cover:'', items:[]};
+    const cover = block.cover || block.items.find(x=>x.imageUrl)?.imageUrl || '';
+    const card = document.createElement('div');
+    card.className = 'catcard';
+    card.innerHTML = `
+      <div class="left">
+        ${cover ? `<div class="catimg" style="background-image:url('${cover}')"></div>` : `<div class="emoji">🛍️</div>`}
+        <div>
+          <div class="name">${cat}</div>
+          <div class="count">${block.items.length} producto${block.items.length!==1?'s':''}</div>
+        </div>
+      </div>
+      <div>→</div>`;
+    card.onclick = ()=>{
+      state.category = cat;
+      showView('products');
+      $('#catTitle').textContent = cat;
+      renderCategories();
+      renderGrid();
+    };
+    host.appendChild(card);
+  });
+
+  if(!INDEX.length){
+    host.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`;
+  }
+}
+
+/************ LISTADO DE PRODUCTOS ************/
+function productMatches(p){
+  const hayCat = (state.category==='Todo') || (p.category === state.category);
+  const haySearch = !state.search || (p.name + ' ' + (p.description||'')).toLowerCase().includes(state.search.toLowerCase());
+  return hayCat && haySearch;
+}
+
+function currentItems(){
+  const base = (state.category==='Todo'|| !state.category) ? allItems() : (DATA[state.category]?.items||[]);
+  return base.filter(productMatches);
+}
+
+function renderGrid(){
+  const grid = $('#grid');
+  grid.innerHTML = '';
+  const items = currentItems();
+
+  items.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb' + (p.imageUrl ? ' hasimg' : '');
+    if(p.imageUrl) thumb.style.backgroundImage = `url('${p.imageUrl}')`;
+    else thumb.textContent = '🛍️';
+
+    const content = document.createElement('div');
+    content.className = 'content';
+    content.innerHTML = `
+      <h3 class="title">${p.name}</h3>
+      <div class="desc">${p.description||''}</div>
+      <div class="muted" style="margin:6px 0 8px">${p.category||''}</div>
+      <div class="row-s" style="margin-bottom:8px; gap:8px">
+        <select aria-label="Presentación" data-sel>
+          ${(p.variants||[]).map((v,i)=>`<option value="${i}">${v.label} — ${fmt.format(+v.price||0)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="actions">
+        <button class="btn" data-minus>-</button>
+        <input type="number" min="1" value="1" style="width:70px; text-align:center" data-qty />
+        <button class="btn" data-plus>+</button>
+        <button class="btn primary" data-add>Agregar</button>
+      </div>`;
+
+    const qty = content.querySelector('[data-qty]');
+    content.querySelector('[data-minus]').onclick = ()=> qty.value = Math.max(1, Number(qty.value)-1);
+    content.querySelector('[data-plus]').onclick = ()=> qty.value = Number(qty.value)+1;
+    content.querySelector('[data-add]').onclick = ()=>{
+      const variantIndex = Number(content.querySelector('[data-sel]').value || 0);
+      addToCart(p, variantIndex, Number(qty.value||1));
+    };
+
+    card.appendChild(thumb);
+    card.appendChild(content);
+    grid.appendChild(card);
+  });
+
+  if(!items.length){
+    grid.innerHTML = `<p class="muted">No hay productos que coincidan.</p>`;
+  }
+}
+
+/************ NAVEGACIÓN DE VISTAS ************/
+function showView(v){
+  state.view = v;
+  $('#homeCats').style.display = (v==='home') ? '' : 'none';
+  $('#productList').style.display = (v==='products') ? '' : 'none';
+  renderCategories();
+}
+
+/************ CARRITO ************/
+function addToCart(product, variantIndex, quantity=1){
+  const v = (product.variants||[])[variantIndex] || (product.variants||[])[0];
+  if(!v) return;
+  const key = `${product.id}__${v.sku || v.label}`;
+  const existing = state.cart.find(i=>i.key===key);
+  if(existing){ existing.qty += quantity; }
+  else {
+    state.cart.push({ key, productId:product.id, name:product.name, variant:v.label, price:+v.price||0, qty:quantity });
+  }
+  saveCart(); renderCart();
+}
+
+function changeQty(key, delta){
+  const item = state.cart.find(i=>i.key===key); if(!item) return;
+  item.qty += delta;
+  if(item.qty <= 0){ state.cart = state.cart.filter(i=>i.key!==key); }
+  saveCart(); renderCart();
+}
+
+function removeItem(key){ state.cart = state.cart.filter(i=>i.key!==key); saveCart(); renderCart(); }
+function clearCart(){ state.cart = []; saveCart(); renderCart(); }
+
+function subtotal(){ return state.cart.reduce((s,i)=> s + i.price * i.qty, 0); }
+function selectedShipping(){ return STORE.shippingOptions.find(o=>o.id===state.shipping) || STORE.shippingOptions[0]; }
+
+function renderCart(){
+  // badge
+  const count = state.cart.reduce((s,i)=> s + i.qty, 0);
+  $('#cartCount').textContent = count;
+
+  // shipping select
+  const sel = $('#shippingSelect');
+  sel.innerHTML = STORE.shippingOptions.map(o=>`<option value="${o.id}">${o.label} — ${fmt.format(o.price)}</option>`).join('');
+  sel.value = state.shipping;
+  sel.onchange = e=>{ state.shipping = e.target.value; updateTotals(); };
+
+  // lines
+  const host = $('#cartLines');
+  host.innerHTML = '';
+  if(state.cart.length===0){
+    host.innerHTML = `<p class="muted">Tu carrito está vacío.</p>`;
+  } else {
+    state.cart.forEach(i=>{
+      const line = document.createElement('div');
+      line.className = 'line';
+      line.innerHTML = `
+        <div>
+          <div style="font-weight:700">${i.name} <span class="muted">(${i.variant})</span></div>
+          <div class="muted">${fmt.format(i.price)} c/u</div>
+          <button class="remove" aria-label="Quitar">Quitar</button>
+        </div>
+        <div class="qty">
+          <button class="btn" aria-label="Menos">-</button>
+          <strong>${i.qty}</strong>
+          <button class="btn" aria-label="Más">+</button>
+        </div>`;
+      const [minusBtn, plusBtn] = line.querySelectorAll('.qty .btn');
+      minusBtn.onclick = ()=> changeQty(i.key, -1);
+      plusBtn.onclick = ()=> changeQty(i.key, +1);
+      line.querySelector('.remove').onclick = ()=> removeItem(i.key);
+      host.appendChild(line);
+    });
+  }
+  updateTotals();
+}
+
+function updateTotals(){
+  const sub = subtotal();
+  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const total = sub + ship;
+  $('#subtotal').textContent = fmt.format(sub);
+  $('#shippingCost').textContent = fmt.format(ship);
+  $('#grandTotal').textContent = fmt.format(total);
+}
+
+/************ WHATSAPP ************/
+function buildWhatsAppURL(){
+  if(!STORE.phone || STORE.phone.replace(/\D/g,'').length < 10){
+    alert('Configurá tu número de WhatsApp en STORE.phone (formato internacional).');
+    return '#';
+  }
+  if(state.cart.length===0){ alert('Tu carrito está vacío.'); return '#'; }
+
+  const cust = {
+    name: $('#custName').value.trim(),
+    area: $('#custArea').value.trim(),
+    address: $('#custAddress').value.trim(),
+    notes: $('#notes').value.trim()
+  };
+  const sub = subtotal();
+  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const total = sub + ship;
+
+  const items = state.cart
+    .map(i=>`• ${i.name} (${i.variant}) x${i.qty} — ${fmt.format(i.price*i.qty)}`)
+    .join('%0A');
+
+  const msg = [
+    `Hola ${STORE.name}! Quiero hacer un pedido:`,
+    items,
+    `Subtotal: ${fmt.format(sub)}`,
+    `Envío: ${selectedShipping().label} — ${fmt.format(ship)}`,
+    `TOTAL: ${fmt.format(total)}`,
+    '',
+    `Nombre: ${cust.name || '-'}`,
+    `Zona: ${cust.area || '-'}`,
+    `Dirección: ${cust.address || '-'}`,
+    cust.notes ? `Notas: ${cust.notes}` : ''
+  ].join('%0A');
+
+  return `https://wa.me/${STORE.phone}?text=${msg}`;
+}
+
+/************ INIT ************/
+async function init(){
+  await fetchCatalog();
+  $('#storeName').textContent = STORE.name;
+
+  // Buscar: si tipeás en home → vista productos (Todo)
+  $('#searchInput').addEventListener('input', e=>{
+    state.search = e.target.value;
+    if(state.view==='home'){
+      state.category = 'Todo';
+      showView('products');
+      $('#catTitle').textContent = '';
+    }
+    renderGrid();
+  });
+
+  // Drawer carrito
+  const drawer = $('#drawer');
+  $('#openCartBtn').onclick = ()=>{ drawer.classList.add('open'); renderCart(); };
+  $('#closeCartBtn').onclick = ()=> drawer.classList.remove('open');
+
+  // Acciones carrito
+  $('#clearBtn').onclick = ()=>{ if(confirm('¿Vaciar carrito?')) clearCart(); };
+  $('#whatsBtn').onclick = ()=>{
+    const url = buildWhatsAppURL();
+    if(url && url !== '#') window.open(url, '_blank');
+  };
+
+  // Back a categorías
+  $('#backBtn').onclick = ()=>{ showView('home'); };
+
+  // Render inicial
+  renderHomeCats();
+  renderCategories();
+  renderCart();
+  showView('home');
+}
+init();
+</script>
+</body>
+</html>
