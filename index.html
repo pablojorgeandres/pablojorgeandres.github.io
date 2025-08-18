@@ -92,7 +92,7 @@
     .catcard{background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08); border-radius:var(--radius); box-shadow: var(--shadow); padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer}
     .catcard .left{display:flex; align-items:center; gap:12px}
     .catcard .emoji{font-size:28px; width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:#0b1224; border:1px solid rgba(255,255,255,.06)}
-    .catcard .catimg{width:56px; height:56px; border-radius:12px; background:#0b1224 center/cover no-repeat; border:1px solid rgba(255,255,255,.06)}
+    .catcard .catimg{width:120px; height:120px; border-radius:12px; background:#0b1224 center/cover no-repeat; border:1px solid rgba(255,255,255,.06)}
     .catcard .name{font-weight:800}
     .catcard .count{color:#94a3b8; font-size:12px}
   </style>
@@ -164,7 +164,7 @@
   </aside>
 
   <footer>
-    Hecho con ❤️ en HTML + JS puros. Editá <em>PRODUCTS_URL</em> y <em>STORE</em> en el script.
+    Hecho con ❤️ en HTML + JS. Contacto a <em>pablojorgeandres@gmail.com</em>
   </footer>
 
 <script>
@@ -175,9 +175,9 @@ const STORE = {
   currency: 'ARS',
   freeShippingMin: 30000, // umbral envío gratis (opcional)
   shippingOptions: [
-    { id:'retiro', label:'Retiro en local (sin costo)', price:0 },
-    { id:'caba', label:'Envío CABA', price:2500 },
-    { id:'amba', label:'Envío AMBA', price:3500 }
+    { id:'Envío', label:'Envío sin costo', price:0 },
+    // { id:'caba', label:'Envío CABA', price:2500 },
+    //{ id:'amba', label:'Envío AMBA', price:3500 }
   ]
 };
 
@@ -234,6 +234,23 @@ async function fetchCatalog(){
     DATA = {};
     INDEX = [];
   }
+}
+
+async function fetchCatalogFast(){
+  // 1) mostrar cache local si existe
+  const cached = localStorage.getItem('catalog_grouped_v2');
+  if (cached) {
+    DATA = JSON.parse(cached);
+    INDEX = Object.keys(DATA);
+    renderHomeCats(); renderCategories();
+  }
+  // 2) pedir al backend y actualizar cuando llegue
+  const res = await fetch(`${PRODUCTS_URL}?grouped=true`); // podés sacar 'no-store'
+  const fresh = await res.json();
+  DATA = fresh; INDEX = Object.keys(DATA);
+  localStorage.setItem('catalog_grouped_v2', JSON.stringify(fresh));
+  // refrescar vista actual
+  if (state.view === 'home') renderHomeCats(); else renderGrid();
 }
 
 /************ UI: CATEGORÍAS (píldoras) ************/
@@ -478,7 +495,7 @@ function buildWhatsAppURL(){
 
 /************ INIT ************/
 async function init(){
-  await fetchCatalog();
+  await fetchCatalogFast();
   $('#storeName').textContent = STORE.name;
 
   // Buscar: si tipeás en home → vista productos (Todo)
