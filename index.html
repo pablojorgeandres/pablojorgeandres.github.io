@@ -63,8 +63,11 @@
 
     /* Floating cart button */
     .fab{
-      position:fixed; right:18px; bottom:18px; z-index:30; display:flex; align-items:center; gap:10px;
-      background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#06281e; border:none; border-radius:999px; padding:12px 16px; font-weight:800; box-shadow: var(--shadow); cursor:pointer
+      display:flex; align-items:center; gap:10px;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      color:#06281e; border:none; border-radius:999px;
+      padding:12px 16px; font-weight:800; box-shadow: var(--shadow);
+      cursor:pointer
     }
     .badge{background:#06131b; color:#e2e8f0; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.18)}
 
@@ -95,6 +98,20 @@
     .catcard .catimg{width:120px; height:120px; border-radius:12px; background:#0b1224 center/cover no-repeat; border:1px solid rgba(255,255,255,.06)}
     .catcard .name{font-weight:800}
     .catcard .count{color:#94a3b8; font-size:12px}
+
+    /* Mobile: botón en el header, alineado a la derecha del brand */
+    @media (max-width: 767px){
+      header .row{ display:flex; flex-wrap:wrap; align-items:center; }
+      .brand{ order:1; }
+      .fab{ order:2; margin-left:auto; position:static; } /* ← acá se “ancla” al header */
+      .search{ order:3; flex-basis:100%; }                /* buscador pasa abajo */
+      .pillbar{ margin-top:8px; }                         /* aire para las pills */
+    }
+
+    /* Desktop: flotante abajo a la derecha (como antes) */
+    @media (min-width: 768px){
+      .fab{ position:fixed; right:18px; bottom:18px; z-index:30; }
+    }
   </style>
 </head>
 <body>
