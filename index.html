@@ -45,6 +45,8 @@
     .pill.active{background:linear-gradient(135deg, rgba(34,197,94,.18), rgba(6,182,212,.18)); color:#e2e8f0; border-color:rgba(34,197,94,.35)}
 
     main{padding:20px 16px 120px}
+
+    /* Tarjetas genéricas */
     .grid{max-width:1120px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) ); gap:16px}
     .card{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); box-shadow: var(--shadow); display:flex; flex-direction:column; overflow:hidden}
     .thumb{aspect-ratio: 4/3; background:#0b1224; display:grid; place-items:center; font-size:46px}
@@ -99,63 +101,57 @@
     .catcard .name{font-weight:800}
     .catcard .count{color:#94a3b8; font-size:12px}
 
+    /* Pantalla de lugares (capa 0) */
+    .placesgrid{max-width:820px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) ); gap:16px}
+    .placecard{
+      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      padding:18px;
+      cursor:pointer;
+      display:flex; flex-direction:column; gap:12px; align-items:center; text-align:center;
+    }
+    .placeimg{
+      width:100%; aspect-ratio: 16/9;
+      background:#fff center/contain no-repeat;
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:14px;
+    }
+    .placename{font-weight:900; font-size:18px; letter-spacing:.2px}
+
     /* Mobile: botón en el header, alineado a la derecha del brand */
     @media (max-width: 767px){
       header .row{ display:flex; flex-wrap:wrap; align-items:center; }
       .brand{ order:1; }
-      .fab{ order:2; margin-left:auto; position:static; } /* ← acá se “ancla” al header */
-      .search{ order:3; flex-basis:100%; }                /* buscador pasa abajo */
-      .pillbar{ margin-top:8px; }                         /* aire para las pills */
+      .fab{ order:2; margin-left:auto; position:static; }
+      .search{ order:3; flex-basis:100%; }
+      .pillbar{ margin-top:8px; }
     }
-
-    /* Desktop: flotante abajo a la derecha (como antes) */
     @media (min-width: 768px){
       .fab{ position:fixed; right:18px; bottom:18px; z-index:30; }
     }
-    #closeCartBtn {
-      flex: none;
-      padding: 12px 22px;
-      border-radius: 30px;
-    }
 
-    /* === Controles iOS-friendly (evita selects "aplastados") === */
-    /* 1) Tamaño mínimo táctil y tipografía (evita el zoom en iOS) */
+    #closeCartBtn { flex:none; padding:12px 22px; border-radius:30px; }
+
+    /* === Controles iOS-friendly === */
     select, .select,
     input[type="number"], input[type="text"], input[type="search"], textarea {
-      font-size: 16px;        /* ≥16px evita zoom en Safari iOS */
-      line-height: 1.35;      /* previene clipping vertical */
-      min-height: 44px;       /* target táctil recomendado por Apple */
-      padding: 12px 14px;     /* un poquito más de aire */
-      border-radius: 12px;    /* mantener look & feel */
+      font-size: 16px; line-height: 1.35; min-height: 44px; padding: 12px 14px; border-radius: 12px;
     }
-
-    /* 2) Select con flecha propia y más padding derecho */
     select, .select {
-      -webkit-appearance: none;
-      appearance: none;
-      padding-right: 42px; /* espacio para la flecha */
+      -webkit-appearance: none; appearance: none; padding-right: 42px;
       background-image: url('data:image/svg+xml;utf8,\
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cbd5e1"><path d="M7 10l5 5 5-5"/></svg>');
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      background-size: 16px 16px;
+      background-repeat: no-repeat; background-position: right 12px center; background-size: 16px 16px;
     }
-
-    /* 3) Afinado en mobile: un pelín más de aire si hace falta */
     @media (max-width: 767px){
-      .row-s select, .row-s .select {
-        min-height: 46px;
-        padding: 12px 46px 12px 14px; /* más espacio a la derecha */
-      }
+      .row-s select, .row-s .select { min-height: 46px; padding: 12px 46px 12px 14px; }
     }
+    select:focus, .select:focus, input:focus, textarea:focus { outline: 2px solid rgba(34,197,94,.55); outline-offset: 2px; }
 
-    /* 4) (Opcional) Estilo de foco más visible */
-    select:focus, .select:focus,
-    input:focus, textarea:focus {
-      outline: 2px solid rgba(34,197,94,.55);
-      outline-offset: 2px;
-    }
-
+    /* Botoncito utilitario */
+    .linkbtn{ background:transparent; color:#a5f3fc; border:1px dashed rgba(165,243,252,.4); padding:8px 12px; border-radius:999px; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -173,18 +169,33 @@
   </header>
 
   <main>
-    <!-- Home: mosaico de categorías -->
-    <section id="homeCats">
-      <div class="container">
-        <h2 style="margin:8px 0 12px">Explorá por categoría</h2>
-        <div class="catsgrid" id="catsGrid"></div>
+    <!-- Capa 0: selección de lugar -->
+    <section id="placeSelect">
+      <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
+        <h2 style="margin:8px 0 12px">Elegí tu lugar</h2>
       </div>
+      <div class="placesgrid" id="placesGrid"></div>
+    </section>
+
+    <!-- Home: mosaico de categorías -->
+    <section id="homeCats" style="display:none">
+      <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
+        <div>
+          <h2 style="margin:8px 0 12px">Explorá por categoría</h2>
+          <div class="muted" id="placeBadge" style="margin-top:-6px"></div>
+        </div>
+        <button class="linkbtn" id="changePlaceBtn">Cambiar lugar</button>
+      </div>
+      <div class="catsgrid" id="catsGrid"></div>
     </section>
 
     <!-- Listado de productos dentro de una categoría -->
     <section id="productList" style="display:none">
       <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
-        <button class="btn" id="backBtn">← Todas las categorías</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn" id="backToCatsBtn">← Categorías</button>
+          <button class="linkbtn" id="changePlaceBtn2">Cambiar lugar</button>
+        </div>
         <div class="muted" id="catTitle"></div>
       </div>
       <div class="grid" id="grid"></div>
@@ -232,24 +243,34 @@
 /************ CONFIG ************/
 const STORE = {
   name: 'Nimú - Tienda Consciente',
-  phone: '5491123965312', // Formato internacional sin + ni guiones. Ej: 5491155555555
+  phone: '5491123965312', // Formato internacional sin + ni guiones
   currency: 'ARS',
-  freeShippingMin: 30000, // umbral envío gratis (opcional)
+  freeShippingMin: 30000,
   shippingOptions: [
     { id:'Envío', label:'Envío sin costo', price:0 },
-    // { id:'caba', label:'Envío CABA', price:2500 },
-    //{ id:'amba', label:'Envío AMBA', price:3500 }
   ]
 };
 
 // TU endpoint de Apps Script (termina en /exec)
-const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbwTEnMabl0MddHbKtcdG3gjLxd3QSDYGW1hvKiM-Tgblz3DbOHHtCUsTfKiKRmoUywu/exec';
+const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 
-/************ DATA desde backend (grouped=true) ************/
-let DATA = {};        // { "Frutos Secos": { cover, items:[{id,name,imageUrl,description,variants,category}...] }, ... }
-let INDEX = [];       // ['Frutos Secos','Harinas',...]
+/**
+ * Siluetas (placeholders) – reemplazá por tus contornos si querés.
+ * Podés usar PNG/SVG externos o data-URIs.
+ */
+const PLACE_SHAPES = {
+  santafe: 'https://drive.google.com/thumbnail?id=1o8eKJyWCRDHvVV2CbYHGxQbgmrcml0cg&sz=w800',
+  buenosaires: 'https://drive.google.com/thumbnail?id=11RLU0gQ7NDfTPZnKqEQT1F2qq_vaCAqK&sz=w800'
+};
+
+/************ DATA ************/
+let DATA = {};        // catálogo por categoría
+let INDEX = [];       // lista de categorías
+let PLACES_META = []; // [{id,name}]
 let state = {
-  view: 'home',       // 'home' | 'products'
+  view: 'places',     // 'places' | 'home' | 'products'
+  place: null,        // 'santafe' | 'buenosaires'
+  placeName: '',
   category: null,     // null| 'Frutos Secos' | 'Todo'
   search: '',
   cart: loadCart(),
@@ -281,7 +302,7 @@ function sanitizeCatalog(data){
     const block = data[cat] || {};
     const items = Array.isArray(block.items) ? [...block.items] : [];
 
-    // buscar sentinela
+    // sentinel para cover
     const idx = items.findIndex(p =>
       String(p?.name||'').trim().toLowerCase() === 'categoryimage' ||
       String(p?.id||'').trim().toLowerCase() === '_cover'
@@ -289,11 +310,9 @@ function sanitizeCatalog(data){
 
     if (idx >= 0) {
       const raw = items[idx].imageUrl || '';
-      block.cover = normalizeImageUrl(raw);   // ← 1) NORMALIZO COVER
-      items.splice(idx, 1);                   // sacar el sentinela del listado
+      block.cover = normalizeImageUrl(raw);
+      items.splice(idx, 1);
     }
-
-    // si ya venía cover desde el backend, también lo normalizo
     if (block.cover) block.cover = normalizeImageUrl(block.cover);
 
     block.items = items;
@@ -302,32 +321,80 @@ function sanitizeCatalog(data){
   return out;
 }
 
-
 /************ FETCH ************/
-async function fetchCatalogFast(){
-  // migración de cache (solo 1 vez por navegador)
-  if (!localStorage.getItem('catalog_migrated_to_v3')) {
-    ['catalog_grouped_v1','catalog_grouped_v2'].forEach(k => localStorage.removeItem(k));
-    localStorage.setItem('catalog_migrated_to_v3', '1');
+async function fetchPlacesMeta(){
+  let safeList = [
+    { id: 'santafe', name: 'Santa Fe' },
+    { id: 'buenosaires', name: 'Buenos Aires' }
+  ];
+  try{
+    const res = await fetch(`${PRODUCTS_URL}?meta=places&bust=${Date.now()}`, { cache:'no-store' });
+    const data = await res.json();
+    const looksOk = Array.isArray(data) && data.length &&
+      data.every(x => x && typeof x.id === 'string' && typeof x.name === 'string');
+    if (looksOk) safeList = data;
+  } catch(e){
+    console.warn('Usando fallback de lugares:', e);
   }
+  PLACES_META = safeList;
+  renderPlaces();
+}
 
-  // 1) cache local (sanitizado)
-  const cached = localStorage.getItem('catalog_grouped_v3');
+async function fetchCatalogForPlace(placeId){
+  const cacheKey = `catalog_grouped_v3__${placeId}`;
+  // 1) cache local
+  const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       DATA = sanitizeCatalog(JSON.parse(cached));
       INDEX = Object.keys(DATA);
-      renderHomeCats(); renderCategories();
+      if (state.view === 'home') renderHomeCats(); else renderGrid();
     } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
   }
 
-  // 2) pedir fresco (con bust) y guardar SANITIZADO
-  const res = await fetch(`${PRODUCTS_URL}?grouped=true&bust=${Date.now()}`, { cache:'no-store' });
+  // 2) pedir fresco
+  const res = await fetch(`${PRODUCTS_URL}?grouped=true&place=${encode(placeId)}&bust=${Date.now()}`, { cache:'no-store' });
   const fresh = await res.json();
   DATA = sanitizeCatalog(fresh);
   INDEX = Object.keys(DATA);
-  localStorage.setItem('catalog_grouped_v3', JSON.stringify(DATA)); // ← guardamos el SANITIZADO
+  localStorage.setItem(cacheKey, JSON.stringify(DATA));
   if (state.view === 'home') renderHomeCats(); else renderGrid();
+}
+
+/************ UI: LUGARES ************/
+function renderPlaces(){
+  const host = $('#placesGrid');
+  host.innerHTML = '';
+
+  // Si el backend todavía no define lugares, usamos fallback fijo:
+  const list = PLACES_META && PLACES_META.length ? PLACES_META : [
+    { id: 'santafe', name: 'Santa Fe' },
+    { id: 'buenosaires', name: 'Buenos Aires' }
+  ];
+
+  list.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'placecard';
+    const bg = PLACE_SHAPES[p.id] || '';
+    card.innerHTML = `
+      <div class="placeimg" style="${bg ? `background-image:url('${bg}')` : ''}"></div>
+      <div class="placename">${p.name}</div>
+      <div class="muted">Ver productos disponibles en ${p.name}</div>`;
+    card.onclick = async ()=>{
+      state.place = p.id;
+      state.placeName = p.name;
+      $('#placeBadge').textContent = `Lugar: ${state.placeName}`;
+      $('#storeName').textContent = `${STORE.name} — ${state.placeName}`;
+      state.category = 'Todo';
+      state.search = '';
+      showView('home');
+      await fetchCatalogForPlace(state.place);
+      renderCategories();
+      renderHomeCats();
+    };
+    host.appendChild(card);
+  });
+  if(!list.length){ host.innerHTML = `<p class="muted">No hay lugares disponibles.</p>`; }
 }
 
 /************ UI: CATEGORÍAS (píldoras) ************/
@@ -360,7 +427,6 @@ function renderHomeCats(){
   INDEX.forEach(cat=>{
     const block = DATA[cat] || {cover:'', items:[]};
     let cover = normalizeImageUrl(block.cover || '');
-    // fallback por si no hay portada aún
     if (!cover) {
       const alt = (block.items.find(x=>x.imageUrl) || {}).imageUrl || '';
       cover = normalizeImageUrl(alt);
@@ -394,12 +460,10 @@ function productMatches(p){
   const haySearch = !state.search || (p.name + ' ' + (p.description||'')).toLowerCase().includes(state.search.toLowerCase());
   return hayCat && haySearch;
 }
-
 function currentItems(){
   const base = (state.category==='Todo'|| !state.category) ? allItems() : (DATA[state.category]?.items||[]);
   return base.filter(productMatches);
 }
-
 function renderGrid(){
   const grid = $('#grid');
   grid.innerHTML = '';
@@ -454,7 +518,8 @@ function renderGrid(){
 /************ NAVEGACIÓN DE VISTAS ************/
 function showView(v){
   state.view = v;
-  $('#homeCats').style.display = (v==='home') ? '' : 'none';
+  $('#placeSelect').style.display = (v==='places') ? '' : 'none';
+  $('#homeCats').style.display  = (v==='home') ? '' : 'none';
   $('#productList').style.display = (v==='products') ? '' : 'none';
   renderCategories();
 }
@@ -467,7 +532,12 @@ function addToCart(product, variantIndex, quantity=1){
   const existing = state.cart.find(i=>i.key===key);
   if(existing){ existing.qty += quantity; }
   else {
-    state.cart.push({ key, productId:product.id, name:product.name, code:v.code, variant:v.label, price:+v.price||0, qty:quantity });
+    // Incluimos el código de variante si existiera (tu JSON lo trae como "cod" -> acá uso "code")
+    const possibleCode = v.code ?? v.cod ?? v.sku ?? null;
+    state.cart.push({
+      key, productId:product.id, name:product.name,
+      code:possibleCode, variant:v.label, price:+v.price||0, qty:quantity
+    });
   }
   saveCart(); renderCart();
 }
@@ -478,7 +548,6 @@ function changeQty(key, delta){
   if(item.qty <= 0){ state.cart = state.cart.filter(i=>i.key!==key); }
   saveCart(); renderCart();
 }
-
 function removeItem(key){ state.cart = state.cart.filter(i=>i.key!==key); saveCart(); renderCart(); }
 function clearCart(){ state.cart = []; saveCart(); renderCart(); }
 
@@ -564,6 +633,7 @@ function buildWhatsAppURL(){
     `Envío: ${selectedShipping().label} — ${fmt.format(ship)}`,
     `TOTAL: ${fmt.format(total)}`,
     '',
+    `Lugar: ${state.placeName || '-'}`,
     `Nombre: ${cust.name || '-'}`,
     `Zona: ${cust.area || '-'}`,
     `Dirección: ${cust.address || '-'}`,
@@ -575,18 +645,19 @@ function buildWhatsAppURL(){
 
 /************ INIT ************/
 async function init(){
-  await fetchCatalogFast();
+  // Nombre base
   $('#storeName').textContent = STORE.name;
 
-  // Buscar: si tipeás en home → vista productos (Todo)
+  // Buscar: si tipeás en lugares no se mueve; en home va a productos (Todo)
   $('#searchInput').addEventListener('input', e=>{
     state.search = e.target.value;
     if(state.view==='home'){
       state.category = 'Todo';
-      showView('products');
-      $('#catTitle').textContent = '';
+      renderGrid();
     }
-    renderGrid();
+    if(state.view==='products'){
+      renderGrid();
+    }
   });
 
   // Drawer carrito
@@ -601,14 +672,15 @@ async function init(){
     if(url && url !== '#') window.open(url, '_blank');
   };
 
-  // Back a categorías
-  $('#backBtn').onclick = ()=>{ showView('home'); };
+  // Botones navegación
+  $('#changePlaceBtn').onclick = ()=>{ showView('places'); };
+  $('#changePlaceBtn2').onclick = ()=>{ showView('places'); };
+  $('#backToCatsBtn').onclick = ()=>{ showView('home'); renderCategories(); };
 
   // Render inicial
-  renderHomeCats();
-  renderCategories();
+  showView('places');
+  await fetchPlacesMeta();
   renderCart();
-  showView('home');
 }
 init();
 </script>
