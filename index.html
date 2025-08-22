@@ -467,7 +467,7 @@ function addToCart(product, variantIndex, quantity=1){
   const existing = state.cart.find(i=>i.key===key);
   if(existing){ existing.qty += quantity; }
   else {
-    state.cart.push({ key, productId:product.id, name:product.name, variant:v.label, price:+v.price||0, qty:quantity });
+    state.cart.push({ key, productId:product.id, name:product.name, code:v.code, variant:v.label, price:+v.price||0, qty:quantity });
   }
   saveCart(); renderCart();
 }
