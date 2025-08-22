@@ -215,7 +215,8 @@
       <div class="line" style="grid-template-columns:1fr;">
         <input id="custName" placeholder="Tu nombre" />
         <input id="custArea" placeholder="Barrio / Localidad" style="margin-top:8px" />
-        <input id="custAddress" placeholder="Dirección (opcional)" style="margin-top:8px" />
+        <input id="custAddress" placeholder="Dirección (Calle - Provincia - CP)" style="margin-top:8px" />
+        <input id="custPhone" placeholder="Teléfono" style="margin-top:8px" />
       </div>
 
       <div class="line" style="grid-template-columns:1fr;">
@@ -243,7 +244,7 @@
 /************ CONFIG ************/
 const STORE = {
   name: 'Nimú - Tienda Consciente',
-  phone: '5491123965312', // Formato internacional sin + ni guiones
+  phone: '5491123965312',
   currency: 'ARS',
   freeShippingMin: 30000,
   shippingOptions: [
@@ -616,6 +617,7 @@ function buildWhatsAppURL(){
     name: $('#custName').value.trim(),
     area: $('#custArea').value.trim(),
     address: $('#custAddress').value.trim(),
+    phone: $('#custPhone').value.trim(),
     notes: $('#notes').value.trim()
   };
   const sub = subtotal();
@@ -634,8 +636,9 @@ function buildWhatsAppURL(){
     `TOTAL: ${fmt.format(total)}`,
     '',
     `Lugar: ${state.placeName || '-'}`,
-    `Nombre: ${cust.name || '-'}`,
     `Zona: ${cust.area || '-'}`,
+    `Nombre: ${cust.name || '-'}`,
+    `Teléfono: ${cust.phone || '-'}`,
     `Dirección: ${cust.address || '-'}`,
     cust.notes ? `Notas: ${cust.notes}` : ''
   ].join('%0A');
