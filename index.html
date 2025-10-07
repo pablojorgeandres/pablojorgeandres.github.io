@@ -142,6 +142,127 @@ function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
 
 function allItems(){ return INDEX.flatMap(cat => (DATA[cat]?.items)||[]); }
 
+// Función para limpiar cache (útil para debug)
+function clearCache() {
+  const keys = Object.keys(localStorage);
+  const removed = keys.filter(key => key.startsWith('categories_') || key.startsWith('products_') || key.startsWith('catalog_'));
+  removed.forEach(key => localStorage.removeItem(key));
+  console.log('🧹 Cache limpiado:', removed);
+  return removed.length;
+}
+
+/************ SKELETON LOADING ************/
+function createCategoriesSkeleton(count = 8) {
+  const skeletons = [];
+  for (let i = 0; i < count; i++) {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-catcard';
+    skeleton.innerHTML = `
+      <div class="skeleton-left">
+        <div class="skeleton-catimg skeleton"></div>
+        <div class="skeleton-catinfo">
+          <div class="skeleton-catname skeleton"></div>
+          <div class="skeleton-catcount skeleton"></div>
+        </div>
+      </div>
+      <div class="skeleton-arrow skeleton"></div>`;
+    skeletons.push(skeleton);
+  }
+  return skeletons;
+}
+
+function createProductsSkeleton(count = 6) {
+  const skeletons = [];
+  for (let i = 0; i < count; i++) {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-card';
+    skeleton.innerHTML = `
+      <div class="skeleton-thumb skeleton"></div>
+      <div class="skeleton-content">
+        <div class="skeleton-title skeleton"></div>
+        <div class="skeleton-desc skeleton"></div>
+        <div class="skeleton-desc skeleton"></div>
+        <div class="skeleton-category skeleton"></div>
+        <div class="skeleton-price-row">
+          <div class="skeleton-select skeleton"></div>
+        </div>
+        <div class="skeleton-actions">
+          <div class="skeleton-btn skeleton"></div>
+          <div class="skeleton-btn skeleton"></div>
+          <div class="skeleton-btn skeleton"></div>
+          <div class="skeleton-btn skeleton"></div>
+        </div>
+      </div>`;
+    skeletons.push(skeleton);
+  }
+  return skeletons;
+}
+
+function showCategoriesSkeleton() {
+  const host = $('#catsGrid');
+  host.innerHTML = '';
+  const skeletons = createCategoriesSkeleton(8);
+  skeletons.forEach(skeleton => host.appendChild(skeleton));
+}
+
+function showProductsSkeleton() {
+  const host = $('#grid');
+  host.innerHTML = '';
+  const skeletons = createProductsSkeleton(6);
+  skeletons.forEach(skeleton => host.appendChild(skeleton));
+}
+
+function createPlacesSkeleton(count = 2) {
+  const skeletons = [];
+  for (let i = 0; i < count; i++) {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-placecard';
+    skeleton.innerHTML = `
+      <div class="skeleton-placeimg skeleton"></div>
+      <div class="skeleton-placename skeleton"></div>
+      <div class="skeleton-placedesc skeleton"></div>`;
+    skeletons.push(skeleton);
+  }
+  return skeletons;
+}
+
+function showPlacesSkeleton() {
+  const host = $('#placesGrid');
+  host.innerHTML = '';
+  const skeletons = createPlacesSkeleton(2);
+  skeletons.forEach(skeleton => host.appendChild(skeleton));
+}
+
+// Precargar una imagen y retornar Promise
+function preloadImage(url) {
+  return new Promise((resolve, reject) => {
+    if (!url) {
+      resolve(); // Si no hay URL, resolver inmediatamente
+      return;
+    }
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve(); // Resolver incluso si falla para no bloquear
+    img.src = url;
+  });
+}
+
+// Precargar todas las imágenes de categorías
+async function preloadCategoryImages() {
+  const imageUrls = [];
+  
+  INDEX.forEach(cat => {
+    const block = DATA[cat] || {cover:'', count: 0};
+    let cover = normalizeImageUrl(block.cover || '');
+    if (cover) {
+      imageUrls.push(cover);
+    }
+  });
+  
+  // Esperar a que todas las imágenes se precarguen
+  await Promise.all(imageUrls.map(url => preloadImage(url)));
+}
+
 function normalizeImageUrl(u, size=800){
   if(!u) return "";
   if(u.includes("drive.google.com/thumbnail")) return u;
@@ -177,6 +298,9 @@ function sanitizeCatalog(data){
 
 /************ FETCH ************/
 async function fetchPlacesMeta(){
+  // Mostrar skeleton mientras carga lugares
+  showPlacesSkeleton();
+  
   let safeList = [
     { id: 'santafe', name: 'Santa Fe' },
     { id: 'buenosaires', name: 'Buenos Aires' }
@@ -194,25 +318,61 @@ async function fetchPlacesMeta(){
   renderPlaces();
 }
 
-async function fetchCatalogForPlace(placeId){
-  const cacheKey = `catalog_grouped_v3__${placeId}`;
+async function fetchCategoriesForPlace(placeId){
+  // Mostrar skeleton mientras carga
+  if (state.view === 'home') showCategoriesSkeleton();
+  
+  const cacheKey = `categories_v2__${placeId}`;  // Cambié v1 -> v2 para limpiar cache
   // 1) cache local
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
-      DATA = sanitizeCatalog(JSON.parse(cached));
+      DATA = JSON.parse(cached);
       INDEX = Object.keys(DATA);
-      if (state.view === 'home') renderHomeCats(); else renderGrid();
+      if (state.view === 'home') await renderHomeCats();
+      return;
     } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
   }
 
-  // 2) pedir fresco
-  const res = await fetch(`${PRODUCTS_URL}?grouped=true&place=${encode(placeId)}&bust=${Date.now()}`, { cache:'no-store' });
+  // 2) pedir fresco - solo categorías
+  const res = await fetch(`${PRODUCTS_URL}?action=categories&place=${encode(placeId)}&bust=${Date.now()}`, { cache:'no-store' });
   const fresh = await res.json();
-  DATA = sanitizeCatalog(fresh);
+  
+  // Debug: mostrar qué datos llegaron
+  console.log('📊 Datos de categorías recibidos:', fresh);
+  console.log('📝 Nombres de categorías:', Object.keys(fresh));
+  
+  DATA = fresh;
   INDEX = Object.keys(DATA);
   localStorage.setItem(cacheKey, JSON.stringify(DATA));
-  if (state.view === 'home') renderHomeCats(); else renderGrid();
+  if (state.view === 'home') await renderHomeCats();
+}
+
+async function fetchProductsForCategory(placeId, category){
+  // Mostrar skeleton mientras carga productos
+  showProductsSkeleton();
+  
+  const cacheKey = `products_v2__${placeId}__${category}`;  // Cambié v1 -> v2 para cache fresh
+  // 1) cache local
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const products = JSON.parse(cached);
+      DATA[category] = { ...DATA[category], items: products };
+      renderGrid();
+      return;
+    } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
+  }
+
+  // 2) pedir fresco - productos de una categoría
+  const res = await fetch(`${PRODUCTS_URL}?action=products&place=${encode(placeId)}&category=${encode(category)}&bust=${Date.now()}`, { cache:'no-store' });
+  const products = await res.json();
+  localStorage.setItem(cacheKey, JSON.stringify(products));
+  
+  // Actualizar DATA con los productos cargados
+  if (!DATA[category]) DATA[category] = {};
+  DATA[category].items = products;
+  renderGrid();
 }
 
 /************ UI: LUGARES ************/
@@ -239,12 +399,11 @@ function renderPlaces(){
       state.placeName = p.name;
       $('#placeBadge').textContent = `Lugar: ${state.placeName}`;
       $('#storeName').textContent = `${STORE.name} — ${state.placeName}`;
-      state.category = 'Todo';
+      state.category = null;
       state.search = '';
       showView('home');
-      await fetchCatalogForPlace(state.place);
+      await fetchCategoriesForPlace(state.place);
       renderCategories();
-      renderHomeCats();
     };
     host.appendChild(card);
   });
@@ -257,16 +416,19 @@ function renderCategories(){
   bar.innerHTML = '';
   if(state.view !== 'products'){ bar.style.display = 'none'; return; }
 
-  const cats = ['Todo', ...INDEX];
-  cats.forEach(c=>{
+  INDEX.forEach(c=>{
     const b = document.createElement('button');
     b.className = 'pill' + ((state.category===c)?' active':'');
     b.textContent = c;
-    b.onclick = ()=>{
+    b.onclick = async ()=>{
       state.category = c;
-      $('#catTitle').textContent = (c==='Todo') ? '' : c;
-      renderGrid();
+      $('#catTitle').textContent = c;
       highlightCat();
+      if (!DATA[c]?.items) {
+        await fetchProductsForCategory(state.place, c);
+      } else {
+        renderGrid();
+      }
     };
     bar.appendChild(b);
   });
@@ -275,16 +437,29 @@ function renderCategories(){
 function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('active', el.textContent===state.category); }); }
 
 /************ HOME: MOSAICO DE CATEGORÍAS ************/
-function renderHomeCats(){
+async function renderHomeCats(){
   const host = $('#catsGrid');
+  
+  // Debug: mostrar qué categorías se van a renderizar
+  console.log('🎨 Renderizando categorías:', INDEX);
+  console.log('📋 DATA completa:', DATA);
+  
+  // Si no hay categorías, mostrar mensaje
+  if(!INDEX.length){ 
+    console.log('❌ No hay categorías en INDEX');
+    host.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`; 
+    return;
+  }
+  
+  // Precargar todas las imágenes antes de renderizar
+  await preloadCategoryImages();
+  
+  // Ahora renderizar todo junto
   host.innerHTML = '';
   INDEX.forEach(cat=>{
-    const block = DATA[cat] || {cover:'', items:[]};
+    console.log(`🏷️ Procesando categoría: "${cat}"`);
+    const block = DATA[cat] || {cover:'', count: 0};
     let cover = normalizeImageUrl(block.cover || '');
-    if (!cover) {
-      const alt = (block.items.find(x=>x.imageUrl) || {}).imageUrl || '';
-      cover = normalizeImageUrl(alt);
-    }
     const card = document.createElement('div');
     card.className = 'catcard';
     card.innerHTML = `
@@ -292,36 +467,45 @@ function renderHomeCats(){
         ${cover ? `<div class="catimg" style="background-image:url('${cover}')"></div>` : `<div class="emoji">🛍️</div>`}
         <div>
           <div class="name">${cat}</div>
-          <div class="count">${block.items.length} producto${block.items.length!==1?'s':''}</div>
+          <div class="count">${block.count || 0} producto${(block.count || 0)!==1?'s':''}</div>
         </div>
       </div>
-      <div>→</div>`;
-    card.onclick = ()=>{
+      <div class="arrow">→</div>`;
+    card.onclick = async ()=>{
       state.category = cat;
       showView('products');
       $('#catTitle').textContent = cat;
       renderCategories();
+      if (!DATA[cat]?.items) {
+        await fetchProductsForCategory(state.place, cat);
+      } else {
       renderGrid();
+      }
     };
     host.appendChild(card);
   });
-  if(!INDEX.length){ host.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`; }
 }
 
 /************ LISTADO DE PRODUCTOS ************/
 function productMatches(p){
-  const hayCat = (state.category==='Todo') || (p.category === state.category);
   const haySearch = !state.search || (p.name + ' ' + (p.description||'')).toLowerCase().includes(state.search.toLowerCase());
-  return hayCat && haySearch;
+  return haySearch;
 }
 function currentItems(){
-  const base = (state.category==='Todo'|| !state.category) ? allItems() : (DATA[state.category]?.items||[]);
+  if (!state.category) return [];
+  const base = DATA[state.category]?.items || [];
   return base.filter(productMatches);
 }
 function renderGrid(){
   const grid = $('#grid');
   grid.innerHTML = '';
   const items = currentItems();
+
+  // Si no hay categoría seleccionada, mostrar mensaje
+  if (!state.category) {
+    grid.innerHTML = `<p class="muted">Selecciona una categoría para ver productos.</p>`;
+    return;
+  }
 
   items.forEach(p=>{
     const card = document.createElement('div');
@@ -375,6 +559,18 @@ function showView(v){
   $('#placeSelect').style.display = (v==='places') ? '' : 'none';
   $('#homeCats').style.display  = (v==='home') ? '' : 'none';
   $('#productList').style.display = (v==='products') ? '' : 'none';
+  
+  // Limpiar contenido al cambiar de vista para evitar contenido stale
+  if (v === 'home') {
+    $('#catsGrid').innerHTML = '';
+    // Si no hay categorías cargadas, mostrar skeleton
+    if (!INDEX.length) {
+      showCategoriesSkeleton();
+    }
+  } else if (v === 'products') {
+    $('#grid').innerHTML = '';
+  }
+  
   renderCategories();
 }
 
@@ -504,14 +700,10 @@ async function init(){
   // Nombre base
   $('#storeName').textContent = STORE.name;
 
-  // Buscar: si tipeás en lugares no se mueve; en home va a productos (Todo)
+  // Buscar: solo funciona en vista de productos
   $('#searchInput').addEventListener('input', e=>{
     state.search = e.target.value;
-    if(state.view==='home'){
-      state.category = 'Todo';
-      renderGrid();
-    }
-    if(state.view==='products'){
+    if(state.view==='products' && state.category){
       renderGrid();
     }
   });
@@ -531,7 +723,14 @@ async function init(){
   // Botones navegación
   $('#changePlaceBtn').onclick = ()=>{ showView('places'); };
   $('#changePlaceBtn2').onclick = ()=>{ showView('places'); };
-  $('#backToCatsBtn').onclick = ()=>{ showView('home'); renderCategories(); };
+  $('#backToCatsBtn').onclick = async ()=>{ 
+    showView('home'); 
+    renderCategories(); 
+    // Renderizar las tarjetas de categorías si ya están cargadas
+    if (INDEX.length > 0) {
+      await renderHomeCats(); 
+    }
+  };
 
   // Render inicial
   showView('places');
