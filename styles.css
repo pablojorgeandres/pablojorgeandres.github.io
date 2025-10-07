@@ -10,12 +10,25 @@
   --shadow: 0 10px 30px rgba(0,0,0,.35);
   --radius: 18px;
 }
+
+/* Fix para over-scroll background */
+html{
+  background: var(--bg);
+  overscroll-behavior: none;
+  /* iOS Safari fix */
+  -webkit-overflow-scrolling: touch;
+}
+
 *{box-sizing:border-box}
 body{
   margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   background: radial-gradient(1200px 600px at 70% -10%, #0b1024 0%, var(--bg) 60%);
   color:var(--text);
   min-height:100dvh;
+  overscroll-behavior-y: contain;
+  /* iOS bounce fix adicional */
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 header{
   position:sticky; top:0; z-index:20;
@@ -23,10 +36,62 @@ header{
   background: linear-gradient(180deg, rgba(17,24,39,.9), rgba(17,24,39,.6));
   border-bottom: 1px solid rgba(255,255,255,.06);
 }
+
+/* Contenido de cabecera que se pega al header */
+.header-content{
+  position: sticky;
+  top: 110px;
+  z-index: 15;
+  padding: 12px 0;
+  margin-bottom: 8px;
+}
+
+.header-content .container{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-content .nav-left{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-content .nav-title{
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--text);
+  margin: 0;
+}
+
+.header-content .nav-subtitle{
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.header-content .nav-right{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-content .category-name{
+  font-weight: 900;
+  font-size: 24px;
+  color: var(--text);
+  margin: 0;
+}
+
 .container{max-width:1120px; margin:0 auto; padding:18px 16px;}
 .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
 .brand{display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; letter-spacing:.3px}
-.brand i{width:28px; height:28px; border-radius:8px; display:inline-grid; place-items:center; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow: var(--shadow);}
+.brand i{width:31px; height:31px; border-radius:8px; display:inline-grid; place-items:center; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow: var(--shadow);}
 
 .search{flex:1; min-width:220px; display:flex; gap:8px}
 .search input{flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:#0b1224; color:var(--text)}
@@ -91,7 +156,7 @@ a{color:#a5f3fc}
 .catcard .emoji{font-size:28px; width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:#0b1224; border:1px solid rgba(255,255,255,.06); flex-shrink:0}
 .catcard .catimg{width:120px; height:120px; border-radius:12px; background:#0b1224 center/cover no-repeat; border:1px solid rgba(255,255,255,.06); flex-shrink:0}
 .catcard .name{font-weight:800; overflow:hidden; text-overflow:ellipsis}
-.catcard .count{color:#94a3b8; font-size:12px}
+.catcard .count{display: none;}
 .catcard .arrow{color:var(--muted); font-size:18px; flex-shrink:0; margin-left:8px}
 
 /* Pantalla de lugares (capa 0) */
@@ -120,6 +185,20 @@ a{color:#a5f3fc}
   .fab{ order:2; margin-left:auto; position:static; }
   .search{ order:3; flex-basis:100%; }
   .pillbar{ margin-top:8px; }
+  
+  /* Barra sticky responsive */
+  .sticky-nav .container{ 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 8px; 
+  }
+  .sticky-nav .nav-right{ 
+    width: 100%; 
+    justify-content: space-between; 
+  }
+  .sticky-nav .category-name{ 
+    font-size: 18px; 
+  }
 }
 @media (min-width: 768px){
   .fab{ position:fixed; right:18px; bottom:18px; z-index:30; }
