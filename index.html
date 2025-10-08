@@ -14,7 +14,7 @@
       <div class="row">
         <div class="brand"><i><img src="imgs/nimuicon.jpg" alt="Nimú" class="brand-icon"></i> <span id="storeName">Nimú - Tienda Consciente</span></div>
         <div class="search">
-          <input id="searchInput" type="search" placeholder="Buscar: almendras, nuez, sin TACC…" />
+          <input id="searchInput" type="search" placeholder="Buscar productos en todas las categorías..." />
         </div>
         <button class="fab" id="openCartBtn" aria-label="Abrir carrito">🛒 <span class="badge" id="cartCount">0</span></button>
       </div>
@@ -93,7 +93,7 @@
   </aside>
 
   <footer>
-    Hecho con ❤️ en HTML + JS. Contacto a <em>pablojorgeandres@gmail.com</em>
+    Hecho con ❤️ en HTML + JS. Contacto: <em>pablojorgeandres@gmail.com</em>
   </footer>
 
 <script>
@@ -378,6 +378,86 @@ async function fetchProductsForCategory(placeId, category){
   renderGrid();
 }
 
+async function performGlobalSearch(query) {
+  const catsGrid = $('#catsGrid');
+  
+  // Mostrar skeleton mientras busca
+  showCategoriesSkeleton();
+  
+  try {
+    const url = `${PRODUCTS_URL}?action=search&place=${state.place}&q=${encode(query)}&bust=${Date.now()}`;
+    const resp = await fetch(url, { cache:'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    
+    const products = await resp.json();
+    
+    // Renderizar resultados como tarjetas de productos
+    renderSearchResults(products);
+  } catch (err) {
+    console.error('Error en búsqueda global:', err);
+    catsGrid.innerHTML = `<p class="muted">Error al buscar productos</p>`;
+  }
+}
+
+function buildProductCard(p) {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const thumb = document.createElement('div');
+  const img = normalizeImageUrl(p.imageUrl);
+  thumb.className = 'thumb' + (img ? ' hasimg' : '');
+  if(img) thumb.style.backgroundImage = `url('${img}')`;
+  else thumb.textContent = '🛍️';
+
+  const content = document.createElement('div');
+  content.className = 'content';
+  content.innerHTML = `
+    <h3 class="title">${p.name}</h3>
+    <div class="desc">${p.description||''}</div>
+    <div class="muted" style="margin:6px 0 8px">${p.category||''}</div>
+    <div class="row-s" style="margin-bottom:8px; gap:8px">
+      <select aria-label="Presentación" data-sel>
+        ${(p.variants||[]).map((v,i)=>`<option value="${i}">${v.label} — ${fmt.format(+v.price||0)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn" data-minus>-</button>
+      <input type="number" min="1" value="1" style="width:70px; text-align:center" data-qty />
+      <button class="btn" data-plus>+</button>
+      <button class="btn primary" data-add>Agregar</button>
+    </div>`;
+
+  const qty = content.querySelector('[data-qty]');
+  content.querySelector('[data-minus]').onclick = ()=> qty.value = Math.max(1, Number(qty.value)-1);
+  content.querySelector('[data-plus]').onclick = ()=> qty.value = Number(qty.value)+1;
+  content.querySelector('[data-add]').onclick = ()=>{
+    const variantIndex = Number(content.querySelector('[data-sel]').value || 0);
+    addToCart(p, variantIndex, Number(qty.value||1));
+  };
+
+  card.appendChild(thumb);
+  card.appendChild(content);
+  return card;
+}
+
+function renderSearchResults(products) {
+  const catsGrid = $('#catsGrid');
+  
+  if (!products || products.length === 0) {
+    catsGrid.innerHTML = `<p class="muted">No se encontraron productos</p>`;
+    return;
+  }
+  
+  // Cambiar a grid de productos (usar clase .grid en lugar de .catsgrid)
+  catsGrid.className = 'grid';
+  catsGrid.innerHTML = '';
+  
+  products.forEach(p => {
+    const card = buildProductCard(p);
+    catsGrid.appendChild(card);
+  });
+}
+
 /************ UI: LUGARES ************/
 function renderPlaces(){
   const host = $('#placesGrid');
@@ -447,6 +527,9 @@ function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('
 /************ HOME: MOSAICO DE CATEGORÍAS ************/
 async function renderHomeCats(){
   const host = $('#catsGrid');
+  
+  // Asegurar que estamos en modo categorías
+  host.className = 'catsgrid';
   
   // Debug: mostrar qué categorías se van a renderizar
   console.log('🎨 Renderizando categorías:', INDEX);
@@ -567,6 +650,18 @@ function showView(v){
   $('#placeSelect').style.display = (v==='places') ? '' : 'none';
   $('#homeCats').style.display  = (v==='home') ? '' : 'none';
   $('#productList').style.display = (v==='products') ? '' : 'none';
+  
+  // Limpiar búsqueda al cambiar de vista
+  $('#searchInput').value = '';
+  state.search = '';
+  
+  // Mostrar/ocultar buscador según la vista
+  const searchElement = $('.search');
+  if (v === 'places') {
+    searchElement.classList.add('hidden');
+  } else {
+    searchElement.classList.remove('hidden');
+  }
   
   // Limpiar contenido al cambiar de vista para evitar contenido stale
   if (v === 'home') {
@@ -708,11 +803,21 @@ async function init(){
   // Nombre base
   $('#storeName').textContent = STORE.name;
 
-  // Buscar: solo funciona en vista de productos
-  $('#searchInput').addEventListener('input', e=>{
+  // Buscar: funciona en vista de productos y búsqueda global en categorías
+  $('#searchInput').addEventListener('input', async e=>{
     state.search = e.target.value;
+    
+    // Búsqueda en vista de productos (comportamiento actual)
     if(state.view==='products' && state.category){
       renderGrid();
+    }
+    
+    // Búsqueda global en vista de categorías
+    if(state.view==='home' && state.search.length >= 3){
+      await performGlobalSearch(state.search);
+    } else if(state.view==='home' && state.search.length < 3){
+      // Restaurar categorías si el usuario borra
+      await renderHomeCats();
     }
   });
 

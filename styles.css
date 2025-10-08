@@ -95,6 +95,7 @@ header{
 .brand-icon{width:24px; height:24px; object-fit:cover; border-radius:50%;}
 
 .search{flex:1; min-width:220px; display:flex; gap:8px}
+.search.hidden{display:none}
 .search input{flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:#0b1224; color:var(--text)}
 .search input::placeholder{color:#94a3b8}
 

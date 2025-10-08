@@ -153,6 +153,29 @@ function buildProductsForCategory_(spreadsheetId, categoryName){
   return block.items;
 }
 
+/** Nueva: búsqueda global de productos en todas las categorías **/
+function searchProductsInSpreadsheet_(spreadsheetId, searchTerm){
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const allSheets = ss.getSheets()
+    .filter(sh => !sh.getName().startsWith(IGNORED_PREFIX));
+  
+  const allProducts = [];
+  const searchLower = searchTerm.toLowerCase().trim();
+  
+  allSheets.forEach(sh => {
+    const block = readSheetFast_(sh);
+    const matchingProducts = block.items.filter(p => {
+      const nameMatch = p.name.toLowerCase().includes(searchLower);
+      const descMatch = (p.description || "").toLowerCase().includes(searchLower);
+      return nameMatch || descMatch;
+    });
+    
+    allProducts.push(...matchingProducts);
+  });
+  
+  return allProducts;
+}
+
 /** Construye JSON agrupado/plano para un spreadsheet (mantenido para compatibilidad) **/
 function buildCatalogForSpreadsheet_(spreadsheetId, grouped){
   const ss = SpreadsheetApp.openById(spreadsheetId);
@@ -225,6 +248,28 @@ function doGet(e){
     return jsonOut_(data);
   }
 
+  // 4) Nueva acción: búsqueda global de productos
+  if (action === "search" && placeId) {
+    const searchTerm = String(params.q || "").trim();
+    if (!searchTerm) {
+      return jsonOut_({ error: "Parámetro 'q' requerido para búsqueda" });
+    }
+    
+    console.log(`DEBUG: Ejecutando search para ${place.id} - "${searchTerm}"`);
+    const key = `search_v1_${place.id}_${searchTerm.toLowerCase()}`;
+    const cache = CacheService.getScriptCache();
+    const hit = cache.get(key);
+    if (hit) {
+      console.log(`DEBUG: Devolviendo search desde cache`);
+      return jsonOut_(JSON.parse(hit));
+    }
+
+    const data = searchProductsInSpreadsheet_(place.sheetId, searchTerm);
+    console.log(`DEBUG: Search encontrados ${data.length} productos`);
+    cache.put(key, JSON.stringify(data), TTL_SECONDS);
+    return jsonOut_(data);
+  }
+
   // Si llegamos aquí, es un endpoint no reconocido o falta información
   console.log(`DEBUG: Endpoint no reconocido o faltan parámetros`);
   
@@ -244,7 +289,11 @@ function doGet(e){
   // Devolver error para endpoints mal formados
   return jsonOut_({
     error: "Endpoint no reconocido",
-    validActions: ["categories", "products", "places"],
-    example: "?action=categories&place=santafe"
+    validActions: ["categories", "products", "places", "search"],
+    examples: [
+      "?action=categories&place=santafe",
+      "?action=products&place=santafe&category=Frutos Secos",
+      "?action=search&place=santafe&q=almendras"
+    ]
   });
 }
