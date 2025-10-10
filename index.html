@@ -100,6 +100,7 @@
 /************ CONFIG ************/
 const STORE = {
   name: 'Nimú - Consumo con sentido',
+  personalName: 'Anto',
   phone: '5493425325683',
   currency: 'ARS',
   freeShippingMin: 30000,
@@ -781,17 +782,19 @@ function buildWhatsAppURL(){
     .join('%0A');
 
   const msg = [
-    `Hola ${STORE.name}! Quiero hacer un pedido:`,
+    `Hola ${STORE.personalName}! Quiero hacer un pedido:`,
+    '',
     items,
+    '',
     `Subtotal: ${fmt.format(sub)}`,
     `Envío: ${selectedShipping().label} — ${fmt.format(ship)}`,
     `TOTAL: ${fmt.format(total)}`,
     '',
-    `Lugar: ${state.placeName || '-'}`,
-    `Zona: ${cust.area || '-'}`,
     `Nombre: ${cust.name || '-'}`,
     `Teléfono: ${cust.phone || '-'}`,
     `Dirección: ${cust.address || '-'}`,
+    `Zona: ${cust.area || '-'}`,
+    `Lugar: ${state.placeName || '-'}`,
     cust.notes ? `Notas: ${cust.notes}` : ''
   ].join('%0A');
 
