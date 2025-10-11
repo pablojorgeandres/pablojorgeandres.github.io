@@ -112,6 +112,10 @@ const STORE = {
 // TU endpoint de Apps Script (termina en /exec)
 const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 
+// Endpoint para guardar pedidos (spreadsheet separado)
+// IMPORTANTE: Reemplazá esta URL con la de tu deployment después de implementar appscript-pedidos.js
+const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbwUASjYtO2KxF2d-sB1d4VEjnxEtCXekarKIWslvec1wyjjRfsCFI7z-fYE0PFaTNjfqQ/exec';
+
 /**
  * Siluetas (placeholders) – reemplazá por tus contornos si querés.
  * Podés usar PNG/SVG externos o data-URIs.
@@ -759,6 +763,112 @@ function updateTotals(){
 }
 
 /************ WHATSAPP ************/
+async function sendOrderToSheet(){
+  if(!state.place){
+    console.warn('No hay lugar seleccionado');
+    return { success: false, error: 'No hay lugar seleccionado' };
+  }
+  
+  // Verificar que ORDERS_URL esté configurado
+  if(!ORDERS_URL || ORDERS_URL === 'TU_URL_DE_APPSCRIPT_PEDIDOS_AQUI'){
+    console.warn('ORDERS_URL no configurado');
+    return { success: false, error: 'URL de pedidos no configurada' };
+  }
+  
+  const cust = {
+    name: $('#custName').value.trim(),
+    area: $('#custArea').value.trim(),
+    address: $('#custAddress').value.trim(),
+    phone: $('#custPhone').value.trim(),
+    notes: $('#notes').value.trim()
+  };
+  
+  const sub = subtotal();
+  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const total = sub + ship;
+  
+  // Preparar datos del pedido
+  const orderData = {
+    place: state.place,
+    placeName: state.placeName,
+    customer: cust,
+    items: state.cart.map(i => ({
+      code: i.code || '',
+      name: i.name,
+      variant: i.variant,
+      qty: i.qty,
+      price: i.price,
+      subtotal: i.price * i.qty
+    })),
+    subtotal: sub,
+    shipping: {
+      label: selectedShipping().label,
+      price: ship
+    },
+    total: total,
+    timestamp: new Date().toISOString()
+  };
+  
+  return new Promise((resolve) => {
+    try {
+      // Crear iframe invisible para recibir respuesta
+      let iframe = document.getElementById('order-response-frame');
+      if(!iframe){
+        iframe = document.createElement('iframe');
+        iframe.id = 'order-response-frame';
+        iframe.name = 'order-response-frame';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+      }
+      
+      // Listener para capturar respuesta del iframe
+      const messageHandler = (event) => {
+        // Validar origen si es necesario
+        if(event.data && typeof event.data === 'object'){
+          console.log('Respuesta recibida:', event.data);
+          window.removeEventListener('message', messageHandler);
+          resolve(event.data);
+        }
+      };
+      window.addEventListener('message', messageHandler);
+      
+      // Timeout de seguridad (10 segundos)
+      setTimeout(() => {
+        window.removeEventListener('message', messageHandler);
+        resolve({ success: true, message: 'Pedido enviado (sin confirmación)' });
+      }, 10000);
+      
+      // Crear formulario
+      let form = document.getElementById('order-submit-form');
+      if(form) form.remove();
+      
+      form = document.createElement('form');
+      form.id = 'order-submit-form';
+      form.method = 'POST';
+      form.action = ORDERS_URL;
+      form.target = 'order-response-frame';
+      form.style.display = 'none';
+      
+      // Agregar campo con datos JSON
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'orderData';
+      input.value = JSON.stringify(orderData);
+      form.appendChild(input);
+      
+      // Agregar al DOM y enviar
+      document.body.appendChild(form);
+      
+      console.log('Enviando pedido:', orderData);
+      form.submit();
+      
+    } catch(err) {
+      console.error('Error al enviar pedido:', err);
+      resolve({ success: false, error: err.message });
+    }
+  });
+}
+
 function buildWhatsAppURL(){
   if(!STORE.phone || STORE.phone.replace(/\D/g,'').length < 10){
     alert('Configurá tu número de WhatsApp en STORE.phone (formato internacional).');
@@ -829,11 +939,42 @@ async function init(){
   $('#openCartBtn').onclick = ()=>{ drawer.classList.add('open'); renderCart(); };
   $('#closeCartBtn').onclick = ()=> drawer.classList.remove('open');
 
+  // Variable para controlar si hay que mostrar popup al volver
+  let pendingThankYouMessage = false;
+  
+  // Listener para cuando el usuario vuelve a la pestaña
+  window.addEventListener('focus', () => {
+    if(pendingThankYouMessage){
+      pendingThankYouMessage = false;
+      alert('¡Gracias por tu pedido! 🎉\n\nSeguimos por WhatsApp para confirmar los detalles.');
+    }
+  });
+  
   // Acciones carrito
   $('#clearBtn').onclick = ()=>{ if(confirm('¿Vaciar carrito?')) clearCart(); };
   $('#whatsBtn').onclick = ()=>{
+    // Abrir WhatsApp inmediatamente
     const url = buildWhatsAppURL();
-    if(url && url !== '#') window.open(url, '_blank');
+    if(url && url !== '#'){
+      window.open(url, '_blank');
+      
+      // Cerrar el drawer del carrito
+      $('#drawer').classList.remove('open');
+      
+      // Marcar que hay que mostrar el popup cuando vuelva el usuario
+      pendingThankYouMessage = true;
+      
+      // Guardar en el sheet en segundo plano (silencioso)
+      sendOrderToSheet().then(result => {
+        if(result.success){
+          console.log('✅ Pedido guardado correctamente en el sistema');
+        } else {
+          console.warn('⚠️ No se pudo guardar el pedido:', result.error);
+        }
+      }).catch(err => {
+        console.error('❌ Error al guardar pedido:', err);
+      });
+    }
   };
 
   // Botones navegación

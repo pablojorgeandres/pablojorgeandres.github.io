@@ -297,3 +297,114 @@ function doGet(e){
     ]
   });
 }
+
+/** 
+ * Handler para guardar pedidos (POST)
+ */
+function doPost(e){
+  try {
+    const params = (e && e.parameter) || {};
+    const postData = e.postData ? e.postData.contents : null;
+    
+    if (!postData) {
+      return jsonOut_({ success: false, error: 'No hay datos en el POST' });
+    }
+    
+    const orderData = JSON.parse(postData);
+    
+    // Validar que tengamos los datos mínimos
+    if (!orderData.place || !orderData.items || !Array.isArray(orderData.items)) {
+      return jsonOut_({ success: false, error: 'Datos de pedido incompletos' });
+    }
+    
+    // Resolver el lugar y obtener el spreadsheet ID
+    const place = resolvePlace_(orderData.place);
+    
+    // Guardar el pedido
+    const result = saveOrder_(place.sheetId, orderData);
+    
+    return jsonOut_({ success: true, message: 'Pedido guardado correctamente', result });
+  } catch(err) {
+    console.error('Error en doPost:', err);
+    return jsonOut_({ success: false, error: err.toString() });
+  }
+}
+
+/**
+ * Guarda un pedido en el sheet "Pedidos"
+ */
+function saveOrder_(spreadsheetId, orderData) {
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  let sheet = ss.getSheetByName('Pedidos');
+  
+  // Si no existe el sheet "Pedidos", crearlo
+  if (!sheet) {
+    sheet = ss.insertSheet('Pedidos');
+    
+    // Configurar headers
+    const headers = [
+      'Timestamp',
+      'Nombre',
+      'Teléfono',
+      'Dirección',
+      'Zona',
+      'Lugar',
+      'Detalle Productos',
+      'Subtotal',
+      'Envío',
+      'Total',
+      'Notas'
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    
+    // Ajustar anchos de columna
+    sheet.setColumnWidth(1, 150); // Timestamp
+    sheet.setColumnWidth(2, 150); // Nombre
+    sheet.setColumnWidth(3, 120); // Teléfono
+    sheet.setColumnWidth(4, 200); // Dirección
+    sheet.setColumnWidth(5, 120); // Zona
+    sheet.setColumnWidth(6, 120); // Lugar
+    sheet.setColumnWidth(7, 400); // Detalle Productos (más ancho)
+    sheet.setColumnWidth(8, 100); // Subtotal
+    sheet.setColumnWidth(9, 100); // Envío
+    sheet.setColumnWidth(10, 100); // Total
+    sheet.setColumnWidth(11, 200); // Notas
+  }
+  
+  // Formatear detalle de productos
+  const productDetails = orderData.items.map(item => {
+    const code = item.code ? `[${item.code}] ` : '';
+    const subtotal = (item.price * item.qty).toFixed(2);
+    return `${code}${item.name} (${item.variant}) x${item.qty} = $${subtotal}`;
+  }).join('\n');
+  
+  // Preparar fila de datos
+  const timestamp = orderData.timestamp || new Date().toISOString();
+  const customer = orderData.customer || {};
+  const shipping = orderData.shipping || {};
+  
+  const row = [
+    timestamp,
+    customer.name || '',
+    customer.phone || '',
+    customer.address || '',
+    customer.area || '',
+    orderData.placeName || '',
+    productDetails,
+    orderData.subtotal || 0,
+    shipping.price || 0,
+    orderData.total || 0,
+    customer.notes || ''
+  ];
+  
+  // Agregar fila al final
+  sheet.appendRow(row);
+  
+  return {
+    timestamp,
+    rowNumber: sheet.getLastRow()
+  };
+}
