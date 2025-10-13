@@ -35,6 +35,25 @@ function htmlOut_(message){
 }
 
 /**
+ * Formatea un timestamp ISO a formato 'YYYY-MM-DD - HH:MM:SS'
+ */
+function formatTimestamp_(isoString) {
+  try {
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} - ${hours}:${minutes}:${seconds}`;
+  } catch(e) {
+    return isoString; // Si falla, devolver el original
+  }
+}
+
+/**
  * Handler para guardar pedidos (POST desde formulario)
  */
 function doPost(e){
@@ -71,6 +90,7 @@ function doPost(e){
 
 /**
  * Guarda un pedido en la pestaña correspondiente al lugar
+ * NUEVO FORMATO: Una fila por producto, con separadores vacíos
  */
 function saveOrder_(orderData) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -82,19 +102,18 @@ function saveOrder_(orderData) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     
-    // Configurar headers
+    // Configurar headers (10 columnas)
     const headers = [
-      'Timestamp',
+      'Fecha y Hora',
       'Nombre',
       'Teléfono',
       'Dirección',
       'Zona',
       'Lugar',
-      'Detalle Productos',
-      'Subtotal',
-      'Envío',
-      'Total',
-      'Notas'
+      'Notas',
+      'Detalle Producto',
+      'Codigo Producto',
+      'Cantidad'
     ];
     
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -104,55 +123,71 @@ function saveOrder_(orderData) {
     sheet.setFrozenRows(1);
     
     // Ajustar anchos de columna
-    sheet.setColumnWidth(1, 150); // Timestamp
+    sheet.setColumnWidth(1, 160); // Fecha y Hora
     sheet.setColumnWidth(2, 150); // Nombre
     sheet.setColumnWidth(3, 120); // Teléfono
     sheet.setColumnWidth(4, 200); // Dirección
     sheet.setColumnWidth(5, 120); // Zona
     sheet.setColumnWidth(6, 120); // Lugar
-    sheet.setColumnWidth(7, 400); // Detalle Productos (más ancho)
-    sheet.setColumnWidth(8, 100); // Subtotal
-    sheet.setColumnWidth(9, 100); // Envío
-    sheet.setColumnWidth(10, 100); // Total
-    sheet.setColumnWidth(11, 200); // Notas
+    sheet.setColumnWidth(7, 200); // Notas
+    sheet.setColumnWidth(8, 200); // Detalle Producto
+    sheet.setColumnWidth(9, 120); // Codigo Producto
+    sheet.setColumnWidth(10, 80); // Cantidad
   }
   
-  // Formatear detalle de productos
-  const productDetails = orderData.items.map(item => {
-    const code = item.code ? `[${item.code}] ` : '';
-    const subtotal = (item.price * item.qty).toFixed(2);
-    return `${code}${item.name} (${item.variant}) x${item.qty} = $${subtotal}`;
-  }).join('\n');
-  
-  // Preparar fila de datos
-  const timestamp = orderData.timestamp || new Date().toISOString();
+  // Preparar datos comunes
+  const timestamp = formatTimestamp_(orderData.timestamp || new Date().toISOString());
   const customer = orderData.customer || {};
-  const shipping = orderData.shipping || {};
+  const items = orderData.items || [];
   
-  const row = [
-    timestamp,
-    customer.name || '',
-    customer.phone || '',
-    customer.address || '',
-    customer.area || '',
-    orderData.placeName || '',
-    productDetails,
-    orderData.subtotal || 0,
-    shipping.price || 0,
-    orderData.total || 0,
-    customer.notes || ''
-  ];
+  // 1. Insertar fila vacía como separador inicial
+  // Usamos un espacio en la primera celda para forzar a Sheets a mantener la fila
+  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '']);
   
-  // Agregar fila al final
-  sheet.appendRow(row);
+  // 2. Insertar una fila por cada producto
+  items.forEach((item, index) => {
+    let row;
+    
+    if (index === 0) {
+      // Primera fila: todos los datos del cliente + primer producto
+      row = [
+        timestamp,                    // Fecha y Hora
+        customer.name || '',          // Nombre
+        customer.phone || '',         // Teléfono
+        customer.address || '',       // Dirección
+        customer.area || '',          // Zona
+        orderData.placeName || '',    // Lugar
+        customer.notes || '',         // Notas
+        item.name || '',              // Detalle Producto
+        item.code || '',              // Codigo Producto
+        item.qty || 0                 // Cantidad
+      ];
+    } else {
+      // Filas siguientes: solo datos del producto (cliente vacío)
+      row = [
+        '',                           // Fecha y Hora (vacío)
+        '',                           // Nombre (vacío)
+        '',                           // Teléfono (vacío)
+        '',                           // Dirección (vacío)
+        '',                           // Zona (vacío)
+        '',                           // Lugar (vacío)
+        '',                           // Notas (vacío)
+        item.name || '',              // Detalle Producto
+        item.code || '',              // Codigo Producto
+        item.qty || 0                 // Cantidad
+      ];
+    }
+    
+    sheet.appendRow(row);
+  });
   
-  // Formatear la fila recién agregada
-  const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow, 7).setWrap(true); // Wrap text en columna de productos
+  // 3. Insertar fila vacía como separador final
+  // Usamos un espacio en la primera celda para forzar a Sheets a mantener la fila
+  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '']);
   
   return {
     timestamp,
-    rowNumber: lastRow,
+    rowsInserted: items.length + 2, // productos + 2 separadores
     sheetName: sheetName
   };
 }
@@ -160,6 +195,7 @@ function saveOrder_(orderData) {
 /**
  * Función de testing (opcional)
  * Ejecutá esta función manualmente para probar que todo funciona
+ * Prueba con múltiples productos para validar el formato
  */
 function testSaveOrder() {
   const testOrder = {
@@ -176,18 +212,17 @@ function testSaveOrder() {
       {
         code: "ALM001",
         name: "Almendras",
-        variant: "500g",
-        qty: 2,
-        price: 1500,
-        subtotal: 3000
+        qty: 2
       },
       {
         code: "GRA001",
         name: "Granola",
-        variant: "1kg",
-        qty: 1,
-        price: 2500,
-        subtotal: 2500
+        qty: 1
+      },
+      {
+        code: "MIE001",
+        name: "Miel orgánica",
+        qty: 3
       }
     ],
     subtotal: 5500,
@@ -201,6 +236,12 @@ function testSaveOrder() {
   
   const result = saveOrder_(testOrder);
   Logger.log('Test result:', result);
+  Logger.log('Formato esperado:');
+  Logger.log('- Fila vacía');
+  Logger.log('- Fila 1: Todos los datos + Almendras');
+  Logger.log('- Fila 2: Solo producto Granola');
+  Logger.log('- Fila 3: Solo producto Miel');
+  Logger.log('- Fila vacía');
   return result;
 }
 

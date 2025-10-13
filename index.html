@@ -769,12 +769,6 @@ async function sendOrderToSheet(){
     return { success: false, error: 'No hay lugar seleccionado' };
   }
   
-  // Verificar que ORDERS_URL esté configurado
-  if(!ORDERS_URL || ORDERS_URL === 'TU_URL_DE_APPSCRIPT_PEDIDOS_AQUI'){
-    console.warn('ORDERS_URL no configurado');
-    return { success: false, error: 'URL de pedidos no configurada' };
-  }
-  
   const cust = {
     name: $('#custName').value.trim(),
     area: $('#custArea').value.trim(),

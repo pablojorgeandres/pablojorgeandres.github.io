@@ -107,18 +107,18 @@ main{padding:20px 16px 120px}
 
 /* Tarjetas genéricas */
 .grid{max-width:1120px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) ); gap:16px}
-.card{background:var(--bg); border:1px solid rgba(0,0,0,.08); border-radius:var(--radius); box-shadow: var(--shadow); display:flex; flex-direction:column; overflow:hidden}
+.card{background:var(--bg); border:1px solid rgba(0,0,0,.08); border-radius:var(--radius); box-shadow: var(--shadow); display:flex; flex-direction:column; overflow:hidden; justify-content:space-between}
 .thumb{aspect-ratio: 4/3; background:var(--panel); display:grid; place-items:center; font-size:46px}
 .thumb.hasimg{background-size:cover; background-position:center; font-size:0}
-.content{padding:14px}
+.content{padding:14px; display:flex; flex-direction:column; flex-grow:1}
 .title{font-weight:700; font-size:16px; line-height:1.2; margin:0 0 6px}
-.desc{color:var(--muted); font-size:13px; min-height:34px}
+.desc{color:var(--muted); font-size:13px; min-height:34px; flex-grow:1}
 .muted{color:#94a3b8; font-size:12px}
 .row-s{display:flex; gap:8px; align-items:center; justify-content:space-between}
 select, button, input[type="number"], textarea{background:var(--panel); color:var(--text); border:1px solid rgba(0,0,0,.12); border-radius:12px; padding:10px 12px}
 select{width:100%}
 .price{font-weight:800}
-.actions{display:flex; gap:8px; margin-top:10px}
+.actions{display:flex; gap:8px; margin-top:auto; padding-top:12px}
 .btn{flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,.12); background:var(--panel); color:var(--text); cursor:pointer}
 .btn.primary{background:linear-gradient(135deg,var(--accent),#7a8a4a); color:var(--bg); font-weight:800; border:none}
 
