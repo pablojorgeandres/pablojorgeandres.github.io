@@ -159,6 +159,47 @@ function clearCache() {
   return removed.length;
 }
 
+// Cache con expiración de 24 horas
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+
+function setCacheWithExpiry(key, data) {
+  const cacheItem = {
+    data: data,
+    timestamp: Date.now()
+  };
+  localStorage.setItem(key, JSON.stringify(cacheItem));
+}
+
+function getCacheWithExpiry(key) {
+  try {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    
+    const cacheItem = JSON.parse(cached);
+    
+    // Si el formato es viejo (sin timestamp), tratarlo como expirado
+    if (!cacheItem.timestamp) {
+      return null;
+    }
+    
+    // Verificar si ha expirado (más de 24 horas)
+    const now = Date.now();
+    const age = now - cacheItem.timestamp;
+    
+    if (age > CACHE_EXPIRY_MS) {
+      // Cache expirado, eliminarlo
+      localStorage.removeItem(key);
+      return null;
+    }
+    
+    return cacheItem.data;
+  } catch (e) {
+    // Si hay error al parsear, tratar como expirado
+    console.warn('Cache corrupta, la ignoro', e);
+    return null;
+  }
+}
+
 /************ SKELETON LOADING ************/
 function createCategoriesSkeleton(count = 8) {
   const skeletons = [];
@@ -330,16 +371,14 @@ async function fetchCategoriesForPlace(placeId){
   // Mostrar skeleton mientras carga
   if (state.view === 'home') showCategoriesSkeleton();
   
-  const cacheKey = `categories_v2__${placeId}`;  // Cambié v1 -> v2 para limpiar cache
-  // 1) cache local
-  const cached = localStorage.getItem(cacheKey);
+  const cacheKey = `categories_v2__${placeId}`;
+  // 1) cache local con expiración de 24 horas
+  const cached = getCacheWithExpiry(cacheKey);
   if (cached) {
-    try {
-      DATA = JSON.parse(cached);
-      INDEX = Object.keys(DATA);
-      if (state.view === 'home') await renderHomeCats();
-      return;
-    } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
+    DATA = cached;
+    INDEX = Object.keys(DATA);
+    if (state.view === 'home') await renderHomeCats();
+    return;
   }
 
   // 2) pedir fresco - solo categorías
@@ -352,7 +391,7 @@ async function fetchCategoriesForPlace(placeId){
   
   DATA = fresh;
   INDEX = Object.keys(DATA);
-  localStorage.setItem(cacheKey, JSON.stringify(DATA));
+  setCacheWithExpiry(cacheKey, DATA);
   if (state.view === 'home') await renderHomeCats();
 }
 
@@ -360,22 +399,19 @@ async function fetchProductsForCategory(placeId, category){
   // Mostrar skeleton mientras carga productos
   showProductsSkeleton();
   
-  const cacheKey = `products_v2__${placeId}__${category}`;  // Cambié v1 -> v2 para cache fresh
-  // 1) cache local
-  const cached = localStorage.getItem(cacheKey);
+  const cacheKey = `products_v2__${placeId}__${category}`;
+  // 1) cache local con expiración de 24 horas
+  const cached = getCacheWithExpiry(cacheKey);
   if (cached) {
-    try {
-      const products = JSON.parse(cached);
-      DATA[category] = { ...DATA[category], items: products };
-      renderGrid();
-      return;
-    } catch(e) { console.warn('Cache corrupta, la ignoro', e); }
+    DATA[category] = { ...DATA[category], items: cached };
+    renderGrid();
+    return;
   }
 
   // 2) pedir fresco - productos de una categoría
   const res = await fetch(`${PRODUCTS_URL}?action=products&place=${encode(placeId)}&category=${encode(category)}&bust=${Date.now()}`, { cache:'no-store' });
   const products = await res.json();
-  localStorage.setItem(cacheKey, JSON.stringify(products));
+  setCacheWithExpiry(cacheKey, products);
   
   // Actualizar DATA con los productos cargados
   if (!DATA[category]) DATA[category] = {};
