@@ -69,9 +69,10 @@
 
       <h4>Datos para el pedido</h4>
       <div class="line" style="grid-template-columns:1fr;">
-        <input id="custName" placeholder="Tu nombre" />
+        <input id="custName" placeholder="Tu nombre *" autocomplete="name" />
+        <input id="custDni" placeholder="DNI *" inputmode="numeric" autocomplete="off" style="margin-top:8px" />
         <input id="custArea" placeholder="Barrio / Localidad" style="margin-top:8px" />
-        <input id="custAddress" placeholder="Dirección (Calle - Provincia - CP)" style="margin-top:8px" />
+        <input id="custAddress" placeholder="Dirección (Calle - Provincia - CP) *" style="margin-top:8px" />
         <input id="custPhone" placeholder="Teléfono" style="margin-top:8px" />
       </div>
 
@@ -799,19 +800,31 @@ function updateTotals(){
 }
 
 /************ WHATSAPP ************/
+function readCustomerFromForm(){
+  return {
+    name: $('#custName').value.trim(),
+    dni: $('#custDni').value.trim(),
+    area: $('#custArea').value.trim(),
+    address: $('#custAddress').value.trim(),
+    phone: $('#custPhone').value.trim(),
+    notes: $('#notes').value.trim()
+  };
+}
+
+function hasRequiredCheckoutFields(cust){
+  return !!(cust.name && cust.address && cust.dni);
+}
+
 async function sendOrderToSheet(){
   if(!state.place){
     console.warn('No hay lugar seleccionado');
     return { success: false, error: 'No hay lugar seleccionado' };
   }
   
-  const cust = {
-    name: $('#custName').value.trim(),
-    area: $('#custArea').value.trim(),
-    address: $('#custAddress').value.trim(),
-    phone: $('#custPhone').value.trim(),
-    notes: $('#notes').value.trim()
-  };
+  const cust = readCustomerFromForm();
+  if(!hasRequiredCheckoutFields(cust)){
+    return { success: false, error: 'Faltan nombre, dirección o DNI' };
+  }
   
   const sub = subtotal();
   const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
@@ -906,13 +919,11 @@ function buildWhatsAppURL(){
   }
   if(state.cart.length===0){ alert('Tu carrito está vacío.'); return '#'; }
 
-  const cust = {
-    name: $('#custName').value.trim(),
-    area: $('#custArea').value.trim(),
-    address: $('#custAddress').value.trim(),
-    phone: $('#custPhone').value.trim(),
-    notes: $('#notes').value.trim()
-  };
+  const cust = readCustomerFromForm();
+  if(!hasRequiredCheckoutFields(cust)){
+    alert('Por favor, completá nombre, dirección y DNI para continuar, necesitamos estos datos para gestionar tu pedido.');
+    return '#';
+  }
   const sub = subtotal();
   const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
   const total = sub + ship;
@@ -931,6 +942,7 @@ function buildWhatsAppURL(){
     `TOTAL: ${fmt.format(total)}`,
     '',
     `Nombre: ${cust.name || '-'}`,
+    `DNI: ${cust.dni || '-'}`,
     `Teléfono: ${cust.phone || '-'}`,
     `Dirección: ${cust.address || '-'}`,
     `Zona: ${cust.area || '-'}`,

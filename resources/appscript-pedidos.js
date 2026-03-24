@@ -102,10 +102,11 @@ function saveOrder_(orderData) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     
-    // Configurar headers (10 columnas)
+    // Configurar headers (11 columnas)
     const headers = [
       'Fecha y Hora',
       'Nombre',
+      'DNI',
       'Teléfono',
       'Dirección',
       'Zona',
@@ -125,14 +126,15 @@ function saveOrder_(orderData) {
     // Ajustar anchos de columna
     sheet.setColumnWidth(1, 160); // Fecha y Hora
     sheet.setColumnWidth(2, 150); // Nombre
-    sheet.setColumnWidth(3, 120); // Teléfono
-    sheet.setColumnWidth(4, 200); // Dirección
-    sheet.setColumnWidth(5, 120); // Zona
-    sheet.setColumnWidth(6, 120); // Lugar
-    sheet.setColumnWidth(7, 200); // Notas
-    sheet.setColumnWidth(8, 200); // Detalle Producto
-    sheet.setColumnWidth(9, 120); // Codigo Producto
-    sheet.setColumnWidth(10, 80); // Cantidad
+    sheet.setColumnWidth(3, 100); // DNI
+    sheet.setColumnWidth(4, 120); // Teléfono
+    sheet.setColumnWidth(5, 200); // Dirección
+    sheet.setColumnWidth(6, 120); // Zona
+    sheet.setColumnWidth(7, 120); // Lugar
+    sheet.setColumnWidth(8, 200); // Notas
+    sheet.setColumnWidth(9, 200); // Detalle Producto
+    sheet.setColumnWidth(10, 120); // Codigo Producto
+    sheet.setColumnWidth(11, 80); // Cantidad
   }
   
   // Preparar datos comunes
@@ -142,7 +144,7 @@ function saveOrder_(orderData) {
   
   // 1. Insertar fila vacía como separador inicial
   // Usamos un espacio en la primera celda para forzar a Sheets a mantener la fila
-  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '']);
+  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '', '']);
   
   // 2. Insertar una fila por cada producto
   items.forEach((item, index) => {
@@ -153,6 +155,7 @@ function saveOrder_(orderData) {
       row = [
         timestamp,                    // Fecha y Hora
         customer.name || '',          // Nombre
+        customer.dni || '',           // DNI
         customer.phone || '',         // Teléfono
         customer.address || '',       // Dirección
         customer.area || '',          // Zona
@@ -167,6 +170,7 @@ function saveOrder_(orderData) {
       row = [
         '',                           // Fecha y Hora (vacío)
         '',                           // Nombre (vacío)
+        '',                           // DNI (vacío)
         '',                           // Teléfono (vacío)
         '',                           // Dirección (vacío)
         '',                           // Zona (vacío)
@@ -183,7 +187,7 @@ function saveOrder_(orderData) {
   
   // 3. Insertar fila vacía como separador final
   // Usamos un espacio en la primera celda para forzar a Sheets a mantener la fila
-  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '']);
+  sheet.appendRow([' ', '', '', '', '', '', '', '', '', '', '']);
   
   return {
     timestamp,
@@ -203,6 +207,7 @@ function testSaveOrder() {
     placeName: "Santa Fe",
     customer: {
       name: "Test Usuario",
+      dni: "30123456",
       phone: "3425123456",
       address: "Calle Falsa 123",
       area: "Centro",
