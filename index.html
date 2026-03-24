@@ -720,6 +720,149 @@ function showView(v){
 }
 
 /************ CARRITO ************/
+const IMPORTANT_NOTICE_LS = 'nim_cart_important_intro_v1';
+const IMPORTANT_ACCEPT_LS = 'nim_cart_important_accept_v1';
+const TRANSFER_ALIAS = 'somosnimu';
+const TRANSFER_CVU = '0000003100098012892054';
+
+let importantExpanded = false;
+let importantIntroTimer = null;
+let importantIntroScheduleLocked = false;
+
+function getImportantIntroDone(){
+  try { return localStorage.getItem(IMPORTANT_NOTICE_LS) === '1'; } catch(e) { return false; }
+}
+function setImportantIntroDone(){
+  try { localStorage.setItem(IMPORTANT_NOTICE_LS, '1'); } catch(e) {}
+}
+
+function getImportantAccepted(){
+  try { return localStorage.getItem(IMPORTANT_ACCEPT_LS) === '1'; } catch(e) { return false; }
+}
+function setImportantAccepted(yes){
+  try {
+    if(yes) localStorage.setItem(IMPORTANT_ACCEPT_LS, '1');
+    else localStorage.removeItem(IMPORTANT_ACCEPT_LS);
+  } catch(e) {}
+}
+
+function clearImportantIntroTimer(){
+  if(importantIntroTimer){
+    clearTimeout(importantIntroTimer);
+    importantIntroTimer = null;
+  }
+}
+
+function onDrawerCloseImportant(){
+  clearImportantIntroTimer();
+  if(state.cart.length > 0 && !getImportantIntroDone()){
+    setImportantIntroDone();
+    importantExpanded = false;
+  }
+}
+
+function scheduleImportantIntroIfNeeded(){
+  if(state.cart.length === 0) return;
+  if(getImportantIntroDone()) return;
+  if(importantIntroScheduleLocked) return;
+  importantIntroScheduleLocked = true;
+  importantIntroTimer = setTimeout(() => {
+    importantIntroTimer = null;
+    importantExpanded = false;
+    setImportantIntroDone();
+    renderCart();
+  }, 10000);
+}
+
+function copyToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).catch(() => copyToClipboardFallback(text));
+  }
+  return Promise.resolve(copyToClipboardFallback(text));
+}
+function copyToClipboardFallback(text){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('aria-hidden', 'true');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
+function buildImportantNoticeEl(){
+  const wrap = document.createElement('div');
+  const accepted = getImportantAccepted();
+  const bodyExpanded = !accepted || importantExpanded;
+  const collapsed = !bodyExpanded;
+  wrap.className = 'line cart-important' + (collapsed ? ' is-collapsed' : '');
+  wrap.innerHTML = `
+    <button type="button" class="cart-important-head" aria-expanded="${!collapsed}" aria-controls="cart-important-panel">
+      <span class="cart-important-title"><span class="cart-important-warn" aria-hidden="true">⚠️</span>Importante</span>
+      <span class="cart-important-chevron" aria-hidden="true">▼</span>
+    </button>
+    <div id="cart-important-panel" class="cart-important-body" ${collapsed ? 'hidden' : ''}>
+      <p class="cart-important-legal">Los precios están sujetos a cambios. Los pedidos serán facturados con la lista vigente al momento del despacho.</p>
+      <p class="cart-important-thanks">¡Gracias por tu comprensión! 😊</p>
+      <div class="cart-important-freeze">
+        <p>Si deseás congelar los precios, podés realizar la transferencia dentro de las 48 hs a la siguiente cuenta y enviar el comprobante por WhatsApp:</p>
+        <div class="cart-important-row">
+          <strong>Alias:</strong> <code>${TRANSFER_ALIAS}</code>
+          <button type="button" class="cart-important-copy" data-copy="${TRANSFER_ALIAS}" title="Copiar alias" aria-label="Copiar alias">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <div class="cart-important-row">
+          <strong>CVU:</strong> <code>${TRANSFER_CVU}</code>
+          <button type="button" class="cart-important-copy" data-copy="${TRANSFER_CVU}" title="Copiar CVU" aria-label="Copiar CVU">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <p><strong>Titular:</strong> Antonella Andreassi</p>
+      </div>
+      <br>
+      <p class="cart-important-legal">En caso de que algún producto no cuente con stock al momento de la entrega, el dinero será devuelto mediante transferencia.</p>
+      <p class="cart-important-legal">¡No se aceptan reclamos por mercadería una vez transcurrida una semana desde la entrega!</p>
+      <div class="cart-important-accept">
+        <label class="cart-important-accept-label">
+          <span>Acepto</span>
+          <input type="checkbox" class="cart-important-accept-cb" ${accepted ? 'checked' : ''} />
+        </label>
+      </div>
+    </div>`;
+  wrap.querySelector('.cart-important-head').addEventListener('click', () => {
+    clearImportantIntroTimer();
+    setImportantIntroDone();
+    if(!getImportantAccepted()){
+      return;
+    }
+    importantExpanded = !importantExpanded;
+    renderCart();
+  });
+  wrap.querySelector('.cart-important-accept-cb').addEventListener('change', e => {
+    const on = e.target.checked;
+    if(on){
+      setImportantAccepted(true);
+      clearImportantIntroTimer();
+      setImportantIntroDone();
+      importantExpanded = false;
+    } else {
+      setImportantAccepted(false);
+      importantExpanded = true;
+    }
+    renderCart();
+  });
+  wrap.querySelectorAll('.cart-important-copy').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      copyToClipboard(btn.getAttribute('data-copy') || '');
+    });
+  });
+  return wrap;
+}
+
 function addToCart(product, variantIndex, quantity=1){
   const v = (product.variants||[])[variantIndex] || (product.variants||[])[0];
   if(!v) return;
@@ -762,10 +905,16 @@ function renderCart(){
 
   // lines
   const host = $('#cartLines');
+  const drawerOpen = $('#drawer').classList.contains('open');
   host.innerHTML = '';
   if(state.cart.length===0){
+    clearImportantIntroTimer();
     host.innerHTML = `<p class="muted">Tu carrito está vacío.</p>`;
   } else {
+    if(!getImportantIntroDone() && !importantIntroScheduleLocked && drawerOpen && !getImportantAccepted()){
+      importantExpanded = true;
+    }
+    host.appendChild(buildImportantNoticeEl());
     state.cart.forEach(i=>{
       const line = document.createElement('div');
       line.className = 'line';
@@ -786,6 +935,9 @@ function renderCart(){
       line.querySelector('.remove').onclick = ()=> removeItem(i.key);
       host.appendChild(line);
     });
+    if(drawerOpen){
+      scheduleImportantIntroIfNeeded();
+    }
   }
   updateTotals();
 }
@@ -978,8 +1130,17 @@ async function init(){
 
   // Drawer carrito
   const drawer = $('#drawer');
-  $('#openCartBtn').onclick = ()=>{ drawer.classList.add('open'); renderCart(); };
-  $('#closeCartBtn').onclick = ()=> drawer.classList.remove('open');
+  $('#openCartBtn').onclick = ()=>{
+    drawer.classList.add('open');
+    if(getImportantAccepted()){
+      importantExpanded = false;
+    }
+    renderCart();
+  };
+  $('#closeCartBtn').onclick = ()=>{
+    onDrawerCloseImportant();
+    drawer.classList.remove('open');
+  };
 
   // Variable para controlar si hay que mostrar popup al volver
   let pendingThankYouMessage = false;
@@ -1001,6 +1162,7 @@ async function init(){
       window.open(url, '_blank');
       
       // Cerrar el drawer del carrito
+      onDrawerCloseImportant();
       $('#drawer').classList.remove('open');
       
       // Marcar que hay que mostrar el popup cuando vuelva el usuario
