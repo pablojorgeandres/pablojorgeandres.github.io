@@ -104,6 +104,16 @@
     </div>
   </dialog>
 
+  <dialog id="appModal" class="app-modal" aria-labelledby="appModalMessage">
+    <div class="app-modal-panel">
+      <p id="appModalMessage" class="app-modal-message"></p>
+      <div class="app-modal-actions">
+        <button type="button" class="btn app-modal-cancel" id="appModalCancel" hidden>Cancelar</button>
+        <button type="button" class="btn primary app-modal-ok" id="appModalOk">Aceptar</button>
+      </div>
+    </div>
+  </dialog>
+
 <script>
 /************ CONFIG ************/
 const STORE = {
@@ -119,9 +129,9 @@ const PLACE_ZONE_CONFIG = {
     mapImage: 'imgs/zonas_sf.jpg',
     options: [
       { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000' }
+      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000 para zona 1' },
+      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000 para zona 2' },
+      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000 para zona 3' }
     ]
   },
   buenosaires: {
@@ -228,6 +238,44 @@ const fmt = new Intl.NumberFormat('es-AR', { style:'currency', currency: STORE.c
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 const encode = s => encodeURIComponent(s);
+
+/************ MODAL (reemplazo alert/confirm) ************/
+function openAppModal({ message, confirmMode }){
+  return new Promise((resolve) => {
+    const dlg = $('#appModal');
+    const msgEl = $('#appModalMessage');
+    const btnOk = $('#appModalOk');
+    const btnCancel = $('#appModalCancel');
+    if(!dlg || !msgEl || !btnOk || !btnCancel){
+      resolve(confirmMode ? false : undefined);
+      return;
+    }
+    msgEl.textContent = message;
+    btnCancel.hidden = !confirmMode;
+    let settled = false;
+    const finish = val => {
+      if(settled) return;
+      settled = true;
+      dlg.removeEventListener('cancel', onEscape);
+      dlg.close();
+      resolve(val);
+    };
+    const onEscape = () => finish(confirmMode ? false : undefined);
+    dlg.addEventListener('cancel', onEscape);
+    btnOk.onclick = () => finish(confirmMode ? true : undefined);
+    btnCancel.onclick = () => finish(false);
+    dlg.showModal();
+    requestAnimationFrame(()=>{ try{ btnOk.focus(); } catch(e){} });
+  });
+}
+
+function appAlert(message){
+  return openAppModal({ message, confirmMode: false }).then(()=>{});
+}
+
+function appConfirm(message){
+  return openAppModal({ message, confirmMode: true });
+}
 
 function loadCart(){ try{ return JSON.parse(localStorage.getItem('cart')) || []; } catch { return []; } }
 function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
@@ -1035,11 +1083,11 @@ function syncZoneUI(){
   zoneSel.setAttribute('required','required');
   zoneSel.innerHTML = `<option value="">Entrega? *</option>` + cfg.options.map(o=>`<option value="${o.id}">${o.label}</option>`).join('');
   zoneSel.value = state.deliveryZone;
-  zoneSel.onchange = ()=>{
+  zoneSel.onchange = async ()=>{
     state.deliveryZone = zoneSel.value;
     saveDeliveryZoneForPlace(state.place);
     const opt = cfg.options.find(o=>o.id===state.deliveryZone);
-    if(opt && opt.popup) alert(opt.popup);
+    if(opt && opt.popup) await appAlert(opt.popup);
     updateTotals();
   };
   if(cfg.mapImage){
@@ -1235,16 +1283,19 @@ async function sendOrderToSheet(){
   });
 }
 
-function buildWhatsAppURL(){
+async function buildWhatsAppURL(){
   if(!STORE.phone || STORE.phone.replace(/\D/g,'').length < 10){
-    alert('Configurá tu número de WhatsApp en STORE.phone (formato internacional).');
+    await appAlert('Configurá tu número de WhatsApp en STORE.phone (formato internacional).');
     return '#';
   }
-  if(state.cart.length===0){ alert('Tu carrito está vacío.'); return '#'; }
+  if(state.cart.length===0){
+    await appAlert('Tu carrito está vacío.');
+    return '#';
+  }
 
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
-    alert('Por favor, completá nombre, dirección, DNI y entrega para continuar, necesitamos estos datos para gestionar tu pedido.');
+    await appAlert('Por favor, completá nombre, dirección, DNI y entrega para continuar, necesitamos estos datos para gestionar tu pedido.');
     return '#';
   }
   const sub = subtotal();
@@ -1327,18 +1378,21 @@ async function init(){
   let pendingThankYouMessage = false;
   
   // Listener para cuando el usuario vuelve a la pestaña
-  window.addEventListener('focus', () => {
+  window.addEventListener('focus', async () => {
     if(pendingThankYouMessage){
       pendingThankYouMessage = false;
-      alert('¡Gracias por tu pedido! 🎉\n\nSeguimos por WhatsApp para confirmar los detalles.');
+      await appAlert('¡Gracias por tu pedido! 🎉\n\nSeguimos por WhatsApp para confirmar los detalles.');
     }
   });
   
   // Acciones carrito
-  $('#clearBtn').onclick = ()=>{ if(confirm('¿Vaciar carrito?')) clearCart(); };
-  $('#whatsBtn').onclick = ()=>{
+  $('#clearBtn').onclick = async ()=>{
+    const ok = await appConfirm('¿Vaciar carrito?');
+    if(ok) clearCart();
+  };
+  $('#whatsBtn').onclick = async ()=>{
     // Abrir WhatsApp inmediatamente
-    const url = buildWhatsAppURL();
+    const url = await buildWhatsAppURL();
     if(url && url !== '#'){
       window.open(url, '_blank');
       

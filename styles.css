@@ -228,6 +228,30 @@ select{width:100%}
 .zone-map-dialog-inner{position:relative; padding:12px; padding-top:40px}
 .zone-map-dialog-close{position:absolute; top:8px; right:8px; z-index:1}
 .zone-map-dialog img{max-width:100%; height:auto; display:block; border-radius:8px}
+
+/* Modal unificado (alert / confirm) */
+.app-modal{
+  max-width:min(360px,92vw);
+  width:100%;
+  padding:0;
+  border:none;
+  border-radius:14px;
+  background:var(--bg);
+  box-shadow:0 12px 40px rgba(0,0,0,.2);
+}
+.app-modal::backdrop{background:rgba(0,0,0,.45)}
+.app-modal-panel{padding:24px 20px 20px}
+.app-modal-message{
+  margin:0 0 20px;
+  font-size:15px;
+  line-height:1.45;
+  color:var(--text);
+  white-space:pre-line;
+}
+.app-modal-actions{display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end}
+.app-modal-actions .btn{min-width:100px}
+.app-modal-actions .btn.primary{border:none}
+
 .cta{display:flex; gap:8px}
 
 footer{opacity:.7; text-align:center; padding:26px; font-size:12px}
