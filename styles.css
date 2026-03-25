@@ -187,6 +187,47 @@ select{width:100%}
 .totals .row{justify-content:space-between}
 .notes{width:100%; min-height:72px}
 .select{width:100%}
+/* Campos del carrito: mismo borde y radios */
+.drawer main > .line.cart-fields-line > .cart-drawer-field{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:12px;
+  min-height:40px;
+  padding:10px 12px;
+  font-size:14px;
+  line-height:1.35;
+  background:var(--bg);
+  color:var(--text);
+}
+.drawer main > .line.cart-fields-line > .cart-drawer-field.select,
+.drawer main > .line.cart-fields-line > select.cart-drawer-field{
+  min-height:44px;
+  padding-right:42px;
+  -webkit-appearance:none;
+  appearance:none;
+  background-color:var(--bg);
+  background-image:url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cbd5e1"><path d="M7 10l5 5 5-5"/></svg>');
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:16px 16px;
+}
+.drawer main > .line.cart-fields-line > textarea.cart-drawer-field{
+  min-height:72px;
+  height:auto;
+  resize:vertical;
+}
+.drawer main > .line.cart-fields-line > :not(:first-child){
+  margin-top:8px;
+}
+.zone-map-link-wrap{display:flex; justify-content:flex-end; margin-top:0}
+.zone-map-link{font-size:13px; padding:0}
+.zone-map-dialog{max-width:min(520px,96vw); padding:0; border:none; border-radius:14px; background:var(--bg); box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.zone-map-dialog::backdrop{background:rgba(0,0,0,.45)}
+.zone-map-dialog-inner{position:relative; padding:12px; padding-top:40px}
+.zone-map-dialog-close{position:absolute; top:8px; right:8px; z-index:1}
+.zone-map-dialog img{max-width:100%; height:auto; display:block; border-radius:8px}
 .cta{display:flex; gap:8px}
 
 footer{opacity:.7; text-align:center; padding:26px; font-size:12px}

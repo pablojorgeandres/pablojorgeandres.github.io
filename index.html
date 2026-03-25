@@ -68,17 +68,17 @@
       <div id="cartLines"></div>
 
       <h4>Datos para el pedido</h4>
-      <div class="line" style="grid-template-columns:1fr;">
-        <input id="custName" placeholder="Tu nombre *" autocomplete="name" />
-        <input id="custDni" placeholder="DNI *" inputmode="numeric" autocomplete="off" style="margin-top:8px" />
-        <input id="custArea" placeholder="Barrio / Localidad" style="margin-top:8px" />
-        <input id="custAddress" placeholder="Dirección (Calle - Provincia - CP) *" style="margin-top:8px" />
-        <input id="custPhone" placeholder="Teléfono" style="margin-top:8px" />
-      </div>
-
-      <div class="line" style="grid-template-columns:1fr;">
-        <select id="shippingSelect" class="select"></select>
-        <textarea id="notes" class="notes" placeholder="Observaciones (horario, cambios, sin sal, etc.)"></textarea>
+      <div class="line cart-fields-line" style="grid-template-columns:1fr;">
+        <input id="custName" class="cart-drawer-field" placeholder="Tu nombre *" autocomplete="name" />
+        <input id="custDni" class="cart-drawer-field" placeholder="DNI *" inputmode="numeric" autocomplete="off" />
+        <input id="custArea" class="cart-drawer-field" placeholder="Barrio / Localidad" />
+        <input id="custAddress" class="cart-drawer-field" placeholder="Dirección (Calle - Provincia - CP) *" />
+        <input id="custPhone" class="cart-drawer-field" placeholder="Teléfono" />
+        <select id="zoneSelect" class="select cart-drawer-field" aria-label="Entrega" required></select>
+        <textarea id="notes" class="notes cart-drawer-field" placeholder="Observaciones (horario, cambios, sin sal, etc.)"></textarea>
+        <div class="zone-map-link-wrap" id="zoneMapLinkWrap">
+          <button type="button" class="linkbtn zone-map-link" id="zoneMapLink">Revisá tu zona!</button>
+        </div>
       </div>
     </main>
 
@@ -97,18 +97,101 @@
     Hecho con ❤️ en HTML + JS. Contacto: <em>pablojorgeandres@gmail.com</em>
   </footer>
 
+  <dialog id="zoneMapDialog" class="zone-map-dialog">
+    <div class="zone-map-dialog-inner">
+      <button type="button" class="btn zone-map-dialog-close" id="zoneMapDialogClose" aria-label="Cerrar">✕</button>
+      <img id="zoneMapImg" src="" alt="Mapa de zonas de entrega" />
+    </div>
+  </dialog>
+
 <script>
 /************ CONFIG ************/
 const STORE = {
   name: 'Nimú - Consumo con sentido',
   personalName: 'Anto',
   phone: '5493425325683',
-  currency: 'ARS',
-  freeShippingMin: 30000,
-  shippingOptions: [
-    { id:'Envío', label:'Envío sin costo', price:0 },
-  ]
+  currency: 'ARS'
 };
+
+/** Zonas de entrega por lugar (pickup + Z1–Z3). BA: mismos montos placeholder hasta mapa/montos propios. */
+const PLACE_ZONE_CONFIG = {
+  santafe: {
+    mapImage: 'imgs/zonas_sf.jpg',
+    options: [
+      { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
+      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000' },
+      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' },
+      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000' }
+    ]
+  },
+  buenosaires: {
+    mapImage: null,
+    options: [
+      { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
+      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000' },
+      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' },
+      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000' }
+    ]
+  }
+};
+
+const ZONE_LS_PREFIX = 'deliveryZone__';
+
+function getPlaceZoneConfig(placeId){
+  return placeId ? PLACE_ZONE_CONFIG[placeId] : null;
+}
+
+function hasZoneDelivery(placeId){
+  return !!(placeId && PLACE_ZONE_CONFIG[placeId]);
+}
+
+function loadDeliveryZoneForPlace(placeId){
+  if(!hasZoneDelivery(placeId)){
+    state.deliveryZone = '';
+    return;
+  }
+  const ids = PLACE_ZONE_CONFIG[placeId].options.map(o => o.id);
+  try{
+    const v = localStorage.getItem(ZONE_LS_PREFIX + placeId);
+    state.deliveryZone = (v && ids.includes(v)) ? v : '';
+  } catch(e){
+    state.deliveryZone = '';
+  }
+}
+
+function saveDeliveryZoneForPlace(placeId){
+  if(!hasZoneDelivery(placeId) || !state.deliveryZone) return;
+  try{ localStorage.setItem(ZONE_LS_PREFIX + placeId, state.deliveryZone); } catch(e){}
+}
+
+function getCurrentZoneOption(){
+  const cfg = getPlaceZoneConfig(state.place);
+  if(!cfg || !state.deliveryZone) return null;
+  return cfg.options.find(o => o.id === state.deliveryZone) || null;
+}
+
+/** Precio numérico de envío según subtotal y zona. */
+function getShippingPrice(subtotal){
+  const opt = getCurrentZoneOption();
+  if(!opt) return 0;
+  if(opt.baseShip === 0 || opt.id === 'pickup') return 0;
+  if(opt.freeMin != null && subtotal >= opt.freeMin) return 0;
+  return opt.baseShip;
+}
+
+/** Texto de línea de envío para totales y pedidos. */
+function getShippingLine(subtotal){
+  const opt = getCurrentZoneOption();
+  if(!opt){
+    if(hasZoneDelivery(state.place)) return 'Entrega — elegí una opción';
+    return `Envío — ${fmt.format(0)}`;
+  }
+  const price = getShippingPrice(subtotal);
+  if(price === 0 && opt.id !== 'pickup' && opt.freeMin != null && subtotal >= opt.freeMin){
+    return `${opt.label} — ${fmt.format(0)} (gratis)`;
+  }
+  return `${opt.label} — ${fmt.format(price)}`;
+}
 
 // TU endpoint de Apps Script (termina en /exec)
 const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
@@ -137,7 +220,7 @@ let state = {
   category: null,     // null| 'Frutos Secos' | 'Todo'
   search: '',
   cart: loadCart(),
-  shipping: STORE.shippingOptions[0].id
+  deliveryZone: ''
 };
 
 /************ UTIL ************/
@@ -522,6 +605,7 @@ function renderPlaces(){
     card.onclick = async ()=>{
       state.place = p.id;
       state.placeName = p.name;
+      loadDeliveryZoneForPlace(state.place);
       $('#placeBadge').textContent = `Lugar: ${state.placeName}`;
       $('#storeName').textContent = `${STORE.name} — ${state.placeName}`;
       state.category = null;
@@ -529,6 +613,7 @@ function renderPlaces(){
       showView('home');
       await fetchCategoriesForPlace(state.place);
       renderCategories();
+      renderCart();
     };
     host.appendChild(card);
   });
@@ -722,6 +807,8 @@ function showView(v){
 /************ CARRITO ************/
 const IMPORTANT_NOTICE_LS = 'nim_cart_important_intro_v1';
 const IMPORTANT_ACCEPT_LS = 'nim_cart_important_accept_v1';
+const IMPORTANT_ACCEPT_AT_LS = 'nim_cart_important_accept_at_v1';
+const IMPORTANT_ACCEPT_TTL_MS = 60 * 60 * 1000;
 const TRANSFER_ALIAS = 'somosnimu';
 const TRANSFER_CVU = '0000003100098012892054';
 
@@ -736,14 +823,42 @@ function setImportantIntroDone(){
   try { localStorage.setItem(IMPORTANT_NOTICE_LS, '1'); } catch(e) {}
 }
 
-function getImportantAccepted(){
-  try { return localStorage.getItem(IMPORTANT_ACCEPT_LS) === '1'; } catch(e) { return false; }
+function clearImportantAcceptStorage(){
+  try {
+    localStorage.removeItem(IMPORTANT_ACCEPT_LS);
+    localStorage.removeItem(IMPORTANT_ACCEPT_AT_LS);
+  } catch(e) {}
 }
+
+function getImportantAccepted(){
+  try {
+    if(localStorage.getItem(IMPORTANT_ACCEPT_LS) !== '1') return false;
+    let at = parseInt(localStorage.getItem(IMPORTANT_ACCEPT_AT_LS), 10);
+    if(!at || isNaN(at)){
+      at = Date.now();
+      localStorage.setItem(IMPORTANT_ACCEPT_AT_LS, String(at));
+    }
+    if(Date.now() - at > IMPORTANT_ACCEPT_TTL_MS){
+      clearImportantAcceptStorage();
+      return false;
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
 function setImportantAccepted(yes){
   try {
-    if(yes) localStorage.setItem(IMPORTANT_ACCEPT_LS, '1');
-    else localStorage.removeItem(IMPORTANT_ACCEPT_LS);
+    if(yes){
+      localStorage.setItem(IMPORTANT_ACCEPT_LS, '1');
+      localStorage.setItem(IMPORTANT_ACCEPT_AT_LS, String(Date.now()));
+    } else {
+      clearImportantAcceptStorage();
+    }
   } catch(e) {}
+}
+
+function clearImportantAcceptIfCartEmpty(){
+  if(state.cart.length === 0) setImportantAccepted(false);
 }
 
 function clearImportantIntroTimer(){
@@ -884,24 +999,72 @@ function changeQty(key, delta){
   const item = state.cart.find(i=>i.key===key); if(!item) return;
   item.qty += delta;
   if(item.qty <= 0){ state.cart = state.cart.filter(i=>i.key!==key); }
+  clearImportantAcceptIfCartEmpty();
   saveCart(); renderCart();
 }
-function removeItem(key){ state.cart = state.cart.filter(i=>i.key!==key); saveCart(); renderCart(); }
-function clearCart(){ state.cart = []; saveCart(); renderCart(); }
+function removeItem(key){
+  state.cart = state.cart.filter(i=>i.key!==key);
+  clearImportantAcceptIfCartEmpty();
+  saveCart(); renderCart();
+}
+function clearCart(){
+  state.cart = [];
+  setImportantAccepted(false);
+  saveCart(); renderCart();
+}
 
 function subtotal(){ return state.cart.reduce((s,i)=> s + i.price * i.qty, 0); }
-function selectedShipping(){ return STORE.shippingOptions.find(o=>o.id===state.shipping) || STORE.shippingOptions[0]; }
+
+function syncZoneUI(){
+  const zoneSel = $('#zoneSelect');
+  const wrap = $('#zoneMapLinkWrap');
+  const link = $('#zoneMapLink');
+  if(!zoneSel || !wrap) return;
+  if(!hasZoneDelivery(state.place)){
+    zoneSel.style.display = 'none';
+    wrap.style.display = 'none';
+    zoneSel.innerHTML = '';
+    zoneSel.required = false;
+    zoneSel.removeAttribute('required');
+    return;
+  }
+  loadDeliveryZoneForPlace(state.place);
+  const cfg = getPlaceZoneConfig(state.place);
+  zoneSel.style.display = '';
+  zoneSel.required = true;
+  zoneSel.setAttribute('required','required');
+  zoneSel.innerHTML = `<option value="">Entrega? *</option>` + cfg.options.map(o=>`<option value="${o.id}">${o.label}</option>`).join('');
+  zoneSel.value = state.deliveryZone;
+  zoneSel.onchange = ()=>{
+    state.deliveryZone = zoneSel.value;
+    saveDeliveryZoneForPlace(state.place);
+    const opt = cfg.options.find(o=>o.id===state.deliveryZone);
+    if(opt && opt.popup) alert(opt.popup);
+    updateTotals();
+  };
+  if(cfg.mapImage){
+    wrap.style.display = 'flex';
+    link.onclick = ()=> openZoneMapDialog(cfg.mapImage);
+  } else {
+    wrap.style.display = 'none';
+    link.onclick = null;
+  }
+}
+
+function openZoneMapDialog(src){
+  const img = $('#zoneMapImg');
+  const dlg = $('#zoneMapDialog');
+  if(!img || !dlg || !src) return;
+  img.src = src;
+  dlg.showModal();
+}
 
 function renderCart(){
   // badge
   const count = state.cart.reduce((s,i)=> s + i.qty, 0);
   $('#cartCount').textContent = count;
 
-  // shipping select
-  const sel = $('#shippingSelect');
-  sel.innerHTML = STORE.shippingOptions.map(o=>`<option value="${o.id}">${o.label} — ${fmt.format(o.price)}</option>`).join('');
-  sel.value = state.shipping;
-  sel.onchange = e=>{ state.shipping = e.target.value; updateTotals(); };
+  syncZoneUI();
 
   // lines
   const host = $('#cartLines');
@@ -944,7 +1107,7 @@ function renderCart(){
 
 function updateTotals(){
   const sub = subtotal();
-  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const ship = getShippingPrice(sub);
   const total = sub + ship;
   $('#subtotal').textContent = fmt.format(sub);
   $('#shippingCost').textContent = fmt.format(ship);
@@ -964,7 +1127,12 @@ function readCustomerFromForm(){
 }
 
 function hasRequiredCheckoutFields(cust){
-  return !!(cust.name && cust.address && cust.dni);
+  if(!(cust.name && cust.address && cust.dni)) return false;
+  if(hasZoneDelivery(state.place)){
+    const z = $('#zoneSelect');
+    if(!z || !z.value) return false;
+  }
+  return true;
 }
 
 async function sendOrderToSheet(){
@@ -975,12 +1143,13 @@ async function sendOrderToSheet(){
   
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
-    return { success: false, error: 'Faltan nombre, dirección o DNI' };
+    return { success: false, error: 'Faltan nombre, dirección, DNI o entrega' };
   }
   
   const sub = subtotal();
-  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const ship = getShippingPrice(sub);
   const total = sub + ship;
+  const zoneOpt = getCurrentZoneOption();
   
   // Preparar datos del pedido
   const orderData = {
@@ -997,8 +1166,10 @@ async function sendOrderToSheet(){
     })),
     subtotal: sub,
     shipping: {
-      label: selectedShipping().label,
-      price: ship
+      label: getShippingLine(sub),
+      price: ship,
+      zoneId: zoneOpt ? state.deliveryZone : '',
+      zoneLabel: zoneOpt ? zoneOpt.label : ''
     },
     total: total,
     timestamp: new Date().toISOString()
@@ -1073,12 +1244,13 @@ function buildWhatsAppURL(){
 
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
-    alert('Por favor, completá nombre, dirección y DNI para continuar, necesitamos estos datos para gestionar tu pedido.');
+    alert('Por favor, completá nombre, dirección, DNI y entrega para continuar, necesitamos estos datos para gestionar tu pedido.');
     return '#';
   }
   const sub = subtotal();
-  const ship = (sub >= STORE.freeShippingMin && STORE.freeShippingMin>0) ? 0 : selectedShipping().price;
+  const ship = getShippingPrice(sub);
   const total = sub + ship;
+  const zoneOpt = getCurrentZoneOption();
 
   const items = state.cart
     .map(i=>`• ${i.name} (${i.variant}) x${i.qty} — ${fmt.format(i.price*i.qty)}`)
@@ -1090,17 +1262,18 @@ function buildWhatsAppURL(){
     items,
     '',
     `Subtotal: ${fmt.format(sub)}`,
-    `Envío: ${selectedShipping().label} — ${fmt.format(ship)}`,
+    `Envío: ${getShippingLine(sub)}`,
     `TOTAL: ${fmt.format(total)}`,
     '',
     `Nombre: ${cust.name || '-'}`,
     `DNI: ${cust.dni || '-'}`,
     `Teléfono: ${cust.phone || '-'}`,
     `Dirección: ${cust.address || '-'}`,
-    `Zona: ${cust.area || '-'}`,
+    `Barrio / zona: ${cust.area || '-'}`,
+    zoneOpt ? `Entrega: ${zoneOpt.label}` : '',
     `Lugar: ${state.placeName || '-'}`,
     cust.notes ? `Notas: ${cust.notes}` : ''
-  ].join('%0A');
+  ].filter(Boolean).join('%0A');
 
   return `https://wa.me/${STORE.phone}?text=${msg}`;
 }
@@ -1127,6 +1300,14 @@ async function init(){
       await renderHomeCats();
     }
   });
+
+  const zoneDlg = $('#zoneMapDialog');
+  $('#zoneMapDialogClose').onclick = ()=>{ if(zoneDlg) zoneDlg.close(); };
+  if(zoneDlg){
+    zoneDlg.addEventListener('click', e=>{
+      if(e.target === zoneDlg) zoneDlg.close();
+    });
+  }
 
   // Drawer carrito
   const drawer = $('#drawer');
