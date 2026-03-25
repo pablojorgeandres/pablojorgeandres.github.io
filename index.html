@@ -129,9 +129,9 @@ const PLACE_ZONE_CONFIG = {
     mapImage: 'imgs/zonas_sf.jpg',
     options: [
       { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000 para zona 1' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000 para zona 2' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000 para zona 3' }
+      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000 para ZONA 1' },
+      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000 para ZONA 2' },
+      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000 para ZONA 3' }
     ]
   },
   buenosaires: {
@@ -414,34 +414,32 @@ function showPlacesSkeleton() {
   skeletons.forEach(skeleton => host.appendChild(skeleton));
 }
 
-// Precargar una imagen y retornar Promise
-function preloadImage(url) {
-  return new Promise((resolve, reject) => {
-    if (!url) {
-      resolve(); // Si no hay URL, resolver inmediatamente
-      return;
-    }
-    const img = new Image();
-    img.onload = () => resolve();
-    img.onerror = () => resolve(); // Resolver incluso si falla para no bloquear
-    img.src = url;
-  });
+/** Valor seguro para CSS url("...") */
+function cssBackgroundUrlValue(url) {
+  if (!url) return '';
+  const safe = String(url).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `url("${safe}")`;
 }
 
-// Precargar todas las imágenes de categorías
-async function preloadCategoryImages() {
-  const imageUrls = [];
-  
-  INDEX.forEach(cat => {
-    const block = DATA[cat] || {cover:'', count: 0};
-    let cover = normalizeImageUrl(block.cover || '');
-    if (cover) {
-      imageUrls.push(cover);
+const LAZY_BG_ROOT_MARGIN = '150px';
+const lazyBgObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const el = entry.target;
+    const url = el.dataset.lazyBg;
+    if (url) {
+      el.style.backgroundImage = cssBackgroundUrlValue(url);
+      if (el.classList.contains('thumb')) el.classList.add('hasimg');
     }
-  });
-  
-  // Esperar a que todas las imágenes se precarguen
-  await Promise.all(imageUrls.map(url => preloadImage(url)));
+    lazyBgObserver.unobserve(el);
+  }
+}, { rootMargin: LAZY_BG_ROOT_MARGIN, threshold: 0.01 });
+
+/** Carga background-image al entrar en viewport (categorías y thumbs de productos). */
+function observeLazyBackground(el, url) {
+  if (!el || !url) return;
+  el.dataset.lazyBg = url;
+  lazyBgObserver.observe(el);
 }
 
 function normalizeImageUrl(u, size=800){
@@ -578,8 +576,8 @@ function buildProductCard(p) {
 
   const thumb = document.createElement('div');
   const img = normalizeImageUrl(p.imageUrl);
-  thumb.className = 'thumb' + (img ? ' hasimg' : '');
-  if(img) thumb.style.backgroundImage = `url('${img}')`;
+  thumb.className = 'thumb';
+  if (img) observeLazyBackground(thumb, img);
   else thumb.textContent = '🛍️';
 
   const content = document.createElement('div');
@@ -700,7 +698,7 @@ function renderCategories(){
 function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('active', el.textContent===state.category); }); }
 
 /************ HOME: MOSAICO DE CATEGORÍAS ************/
-async function renderHomeCats(){
+function renderHomeCats(){
   const host = $('#catsGrid');
   
   // Asegurar que estamos en modo categorías
@@ -717,26 +715,42 @@ async function renderHomeCats(){
     return;
   }
   
-  // Precargar todas las imágenes antes de renderizar
-  await preloadCategoryImages();
-  
-  // Ahora renderizar todo junto
   host.innerHTML = '';
   INDEX.forEach(cat=>{
     console.log(`🏷️ Procesando categoría: "${cat}"`);
     const block = DATA[cat] || {cover:'', count: 0};
-    let cover = normalizeImageUrl(block.cover || '');
+    const cover = normalizeImageUrl(block.cover || '');
     const card = document.createElement('div');
     card.className = 'catcard';
-    card.innerHTML = `
-      <div class="left">
-        ${cover ? `<div class="catimg" style="background-image:url('${cover}')"></div>` : `<div class="emoji">🛍️</div>`}
-        <div>
-          <div class="name">${cat}</div>
-          <div class="count">${block.count || 0} producto${(block.count || 0)!==1?'s':''}</div>
-        </div>
-      </div>
-      <div class="arrow">→</div>`;
+    const left = document.createElement('div');
+    left.className = 'left';
+    if (cover) {
+      const catimg = document.createElement('div');
+      catimg.className = 'catimg';
+      observeLazyBackground(catimg, cover);
+      left.appendChild(catimg);
+    } else {
+      const emoji = document.createElement('div');
+      emoji.className = 'emoji';
+      emoji.textContent = '🛍️';
+      left.appendChild(emoji);
+    }
+    const info = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = cat;
+    const countEl = document.createElement('div');
+    countEl.className = 'count';
+    const n = block.count || 0;
+    countEl.textContent = `${n} producto${n !== 1 ? 's' : ''}`;
+    info.appendChild(nameEl);
+    info.appendChild(countEl);
+    left.appendChild(info);
+    const arrow = document.createElement('div');
+    arrow.className = 'arrow';
+    arrow.textContent = '→';
+    card.appendChild(left);
+    card.appendChild(arrow);
     card.onclick = async ()=>{
       state.category = cat;
       showView('products');
@@ -779,8 +793,8 @@ function renderGrid(){
 
     const thumb = document.createElement('div');
     const img = normalizeImageUrl(p.imageUrl);
-    thumb.className = 'thumb' + (img ? ' hasimg' : '');
-    if(img) thumb.style.backgroundImage = `url('${img}')`;
+    thumb.className = 'thumb';
+    if (img) observeLazyBackground(thumb, img);
     else thumb.textContent = '🛍️';
 
     const content = document.createElement('div');
@@ -1063,6 +1077,14 @@ function clearCart(){
 
 function subtotal(){ return state.cart.reduce((s,i)=> s + i.price * i.qty, 0); }
 
+/** Popup de umbral de envío gratis: solo si el subtotal aún no alcanza el mínimo de la zona. */
+function shouldShowZoneThresholdPopup(opt){
+  if(!opt || !opt.popup) return false;
+  if(opt.id === 'pickup' || opt.baseShip === 0) return false;
+  if(opt.freeMin == null) return false;
+  return subtotal() < opt.freeMin;
+}
+
 function syncZoneUI(){
   const zoneSel = $('#zoneSelect');
   const wrap = $('#zoneMapLinkWrap');
@@ -1076,8 +1098,12 @@ function syncZoneUI(){
     zoneSel.removeAttribute('required');
     return;
   }
+  const preserveDom = (zoneSel.options && zoneSel.options.length) ? zoneSel.value : '';
   loadDeliveryZoneForPlace(state.place);
   const cfg = getPlaceZoneConfig(state.place);
+  if(preserveDom && cfg.options.some(o=>o.id===preserveDom)){
+    state.deliveryZone = preserveDom;
+  }
   zoneSel.style.display = '';
   zoneSel.required = true;
   zoneSel.setAttribute('required','required');
@@ -1087,7 +1113,9 @@ function syncZoneUI(){
     state.deliveryZone = zoneSel.value;
     saveDeliveryZoneForPlace(state.place);
     const opt = cfg.options.find(o=>o.id===state.deliveryZone);
-    if(opt && opt.popup) await appAlert(opt.popup);
+    if(opt && shouldShowZoneThresholdPopup(opt)) await appAlert(opt.popup);
+    zoneSel.value = state.deliveryZone;
+    try{ zoneSel.blur(); } catch(e){}
     updateTotals();
   };
   if(cfg.mapImage){
