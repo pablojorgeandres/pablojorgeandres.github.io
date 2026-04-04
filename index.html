@@ -706,6 +706,7 @@ function renderCategories(){
   if (state.placeName) {
     $('#placeBadge').textContent = `Lugar: ${state.placeName}`;
   }
+  requestAnimationFrame(()=> refreshSiteHeaderHeightVar());
 }
 function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('active', el.textContent===state.category); }); }
 
@@ -848,7 +849,11 @@ function renderGrid(){
   }
 }
 
-/************ BOTÓN "CATEGORÍAS" ANCLADO AL HEADER AL HACER SCROLL ************/
+/************ BOTÓN "CATEGORÍAS" ANCLADO AL HEADER AL HACER SCROLL (< 562px) ************/
+const BACK_TO_CATS_DOCK_MQ = '(max-width: 561px)';
+function isBackToCatsDockViewport(){
+  return typeof window.matchMedia === 'function' && window.matchMedia(BACK_TO_CATS_DOCK_MQ).matches;
+}
 let backToCatsDockRaf = null;
 function releaseBackToCatsDock(){
   const btn = $('#backToCatsBtn');
@@ -872,6 +877,10 @@ function updateBackToCatsDock(){
   const ph = $('#backCatsPlaceholder');
   const productList = $('#productList');
   if(!btn || !ph || !productList || productList.style.display === 'none'){
+    releaseBackToCatsDock();
+    return;
+  }
+  if(!isBackToCatsDockViewport()){
     releaseBackToCatsDock();
     return;
   }
@@ -935,6 +944,17 @@ function scheduleBackToCatsDock(){
 }
 
 /************ NAVEGACIÓN DE VISTAS ************/
+/** Altura del header del sitio → CSS `--nim-site-header-h` (barra sticky del listado en desktop ≥562px). */
+function refreshSiteHeaderHeightVar(){
+  const siteHeader = document.querySelector('body > header');
+  if(!siteHeader){
+    document.documentElement.style.removeProperty('--nim-site-header-h');
+    return;
+  }
+  const h = Math.max(0, Math.ceil(siteHeader.getBoundingClientRect().height));
+  document.documentElement.style.setProperty('--nim-site-header-h', `${h}px`);
+}
+
 function scrollAppToTop(){
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   const list = $('#productList');
@@ -977,6 +997,7 @@ function showView(v){
   if(v === 'products'){
     scrollAppToTop();
     requestAnimationFrame(()=>{
+      refreshSiteHeaderHeightVar();
       requestAnimationFrame(()=> scheduleBackToCatsDock());
     });
   } else {
@@ -1482,6 +1503,18 @@ async function buildWhatsAppURL(){
 async function init(){
   // Nombre base
   $('#storeName').textContent = STORE.name;
+
+  refreshSiteHeaderHeightVar();
+  window.addEventListener('resize', refreshSiteHeaderHeightVar);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', refreshSiteHeaderHeightVar);
+  }
+  if(typeof ResizeObserver !== 'undefined'){
+    const siteHeader = document.querySelector('body > header');
+    if(siteHeader){
+      new ResizeObserver(()=> refreshSiteHeaderHeightVar()).observe(siteHeader);
+    }
+  }
 
   window.addEventListener('scroll', scheduleBackToCatsDock, {passive:true});
   window.addEventListener('resize', scheduleBackToCatsDock);

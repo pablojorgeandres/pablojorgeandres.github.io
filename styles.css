@@ -9,6 +9,8 @@
   --danger:#dc3545;       /* rojo */
   --shadow: 0 10px 30px rgba(0,0,0,.15);
   --radius: 18px;
+  /* Altura del <header> del sitio; la pone JS (sticky bar del listado en ≥562px) */
+  --nim-site-header-h: 220px;
 }
 
 /* Fix para over-scroll background */
@@ -46,12 +48,20 @@ header{
   margin-bottom: 8px;
 }
 
-/* Listado de productos: sin sticky bajo el header del sitio (z-index 20), si no la barra
-   queda tapada y no se ve "← Categorías" ni al inicio ni al scroll. */
+/* Listado de productos: en móvil sin sticky (el botón Categorías usa anclaje JS <562px). */
 #productList .header-content{
   position: relative;
   top: auto;
   z-index: auto;
+}
+
+/* Desktop ≥562px: sticky bajo el header; sin capa visual extra (mismo padding/altura que .header-content) */
+@media (min-width: 562px){
+  #productList .header-content{
+    position: sticky;
+    top: var(--nim-site-header-h, 220px);
+    z-index: 18;
+  }
 }
 
 .header-content .container{
@@ -109,15 +119,18 @@ header{
 .back-cats-wrap .btn.back-cats-btn{
   flex: 0 0 auto;
 }
-#backToCatsBtn.is-header-docked{
-  position: fixed;
-  /* Por encima del header del sitio (z-index 20), por debajo del drawer (40) */
-  z-index: 35;
-  flex: none;
-  margin: 0;
-  min-width: min-content;
-  background: var(--panel);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+/* Anclaje al header solo en viewport < 562px (561px inclusive) */
+@media (max-width: 561px){
+  #backToCatsBtn.is-header-docked{
+    position: fixed;
+    /* Por encima del header del sitio (z-index 20), por debajo del drawer (40) */
+    z-index: 35;
+    flex: none;
+    margin: 0;
+    min-width: min-content;
+    background: var(--panel);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  }
 }
 
 .container{max-width:1120px; margin:0 auto; padding:18px 16px;}
