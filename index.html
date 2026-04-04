@@ -510,7 +510,10 @@ async function fetchCategoriesForPlace(placeId){
   if (cached) {
     DATA = cached;
     INDEX = Object.keys(DATA);
-    if (state.view === 'home') await renderHomeCats();
+    if (state.view === 'home') {
+      await renderHomeCats();
+      scrollAppToTop();
+    }
     return;
   }
 
@@ -525,7 +528,10 @@ async function fetchCategoriesForPlace(placeId){
   DATA = fresh;
   INDEX = Object.keys(DATA);
   setCacheWithExpiry(cacheKey, DATA);
-  if (state.view === 'home') await renderHomeCats();
+  if (state.view === 'home') {
+    await renderHomeCats();
+    scrollAppToTop();
+  }
 }
 
 async function fetchProductsForCategory(placeId, category){
@@ -538,6 +544,7 @@ async function fetchProductsForCategory(placeId, category){
   if (cached) {
     DATA[category] = { ...DATA[category], items: cached };
     renderGrid();
+    if(state.view === 'products') scrollAppToTop();
     return;
   }
 
@@ -550,6 +557,7 @@ async function fetchProductsForCategory(placeId, category){
   if (!DATA[category]) DATA[category] = {};
   DATA[category].items = products;
   renderGrid();
+  if(state.view === 'products') scrollAppToTop();
 }
 
 async function performGlobalSearch(query) {
@@ -688,6 +696,7 @@ function renderCategories(){
       } else {
         renderGrid();
       }
+      scrollAppToTop();
     };
     bar.appendChild(b);
   });
@@ -926,6 +935,14 @@ function scheduleBackToCatsDock(){
 }
 
 /************ NAVEGACIÓN DE VISTAS ************/
+function scrollAppToTop(){
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  const list = $('#productList');
+  const home = $('#homeCats');
+  if(list) list.scrollTop = 0;
+  if(home) home.scrollTop = 0;
+}
+
 function showView(v){
   state.view = v;
   $('#placeSelect').style.display = (v==='places') ? '' : 'none';
@@ -958,11 +975,15 @@ function showView(v){
   renderCategories();
 
   if(v === 'products'){
+    scrollAppToTop();
     requestAnimationFrame(()=>{
       requestAnimationFrame(()=> scheduleBackToCatsDock());
     });
   } else {
     releaseBackToCatsDock();
+    if(v === 'home'){
+      scrollAppToTop();
+    }
   }
 }
 
@@ -1565,7 +1586,8 @@ async function init(){
     renderCategories(); 
     // Renderizar las tarjetas de categorías si ya están cargadas
     if (INDEX.length > 0) {
-      await renderHomeCats(); 
+      await renderHomeCats();
+      scrollAppToTop();
     }
   };
   
