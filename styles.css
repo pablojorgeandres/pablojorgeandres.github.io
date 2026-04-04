@@ -46,6 +46,14 @@ header{
   margin-bottom: 8px;
 }
 
+/* Listado de productos: sin sticky bajo el header del sitio (z-index 20), si no la barra
+   queda tapada y no se ve "← Categorías" ni al inicio ni al scroll. */
+#productList .header-content{
+  position: relative;
+  top: auto;
+  z-index: auto;
+}
+
 .header-content .container{
   display: flex;
   align-items: center;
@@ -86,6 +94,30 @@ header{
   font-size: 24px;
   color: var(--text);
   margin: 0;
+}
+
+/* Botón "Categorías" en listado: al scroll, se ancla a la fila del header (misma línea que el carrito en móvil) */
+.back-cats-wrap{
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.back-cats-placeholder{
+  display: none;
+  flex-shrink: 0;
+}
+.back-cats-wrap .btn.back-cats-btn{
+  flex: 0 0 auto;
+}
+#backToCatsBtn.is-header-docked{
+  position: fixed;
+  /* Por encima del header del sitio (z-index 20), por debajo del drawer (40) */
+  z-index: 35;
+  flex: none;
+  margin: 0;
+  min-width: min-content;
+  background: var(--panel);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
 .container{max-width:1120px; margin:0 auto; padding:18px 16px;}

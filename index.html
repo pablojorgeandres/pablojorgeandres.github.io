@@ -47,9 +47,12 @@
     <section id="productList" style="display:none">
       <div class="header-content">
       <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
-        <div style="display:flex; gap:8px; flex-wrap:wrap">
-          <button class="btn" id="backToCatsBtn">← Categorías</button>
-          <button class="linkbtn" id="changePlaceBtn2">Cambiar lugar</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+          <span class="back-cats-wrap" id="backCatsWrap">
+            <span class="back-cats-placeholder" id="backCatsPlaceholder" aria-hidden="true"></span>
+            <button type="button" class="btn back-cats-btn" id="backToCatsBtn">← Categorías</button>
+          </span>
+          <button type="button" class="linkbtn" id="changePlaceBtn2">Cambiar lugar</button>
         </div>
           <div class="muted" id="catTitle" style="font-size:18px; font-weight:700"></div>
         </div>
@@ -831,6 +834,95 @@ function renderGrid(){
   if(!items.length){
     grid.innerHTML = `<p class="muted">No hay productos que coincidan.</p>`;
   }
+  if(state.view === 'products'){
+    scheduleBackToCatsDock();
+  }
+}
+
+/************ BOTÓN "CATEGORÍAS" ANCLADO AL HEADER AL HACER SCROLL ************/
+let backToCatsDockRaf = null;
+function releaseBackToCatsDock(){
+  const btn = $('#backToCatsBtn');
+  const ph = $('#backCatsPlaceholder');
+  if(!btn) return;
+  btn.classList.remove('is-header-docked');
+  btn.style.top = '';
+  btn.style.left = '';
+  if(ph){
+    ph.removeAttribute('aria-hidden');
+    ph.style.display = '';
+    ph.style.width = '';
+    ph.style.height = '';
+    ph.style.verticalAlign = '';
+    ph.style.visibility = '';
+    ph.style.pointerEvents = '';
+  }
+}
+function updateBackToCatsDock(){
+  const btn = $('#backToCatsBtn');
+  const ph = $('#backCatsPlaceholder');
+  const productList = $('#productList');
+  if(!btn || !ph || !productList || productList.style.display === 'none'){
+    releaseBackToCatsDock();
+    return;
+  }
+  const isDocked = btn.classList.contains('is-header-docked');
+  const laidOut = btn.offsetWidth > 4 && btn.offsetHeight > 4;
+  if(isDocked && !laidOut){
+    releaseBackToCatsDock();
+    return;
+  }
+  if(!isDocked && !laidOut){
+    return;
+  }
+  /* Solo el header principal (no el del drawer aside) */
+  const siteHeader = document.querySelector('body > header');
+  const row = siteHeader && siteHeader.querySelector('.row');
+  const container = siteHeader && siteHeader.querySelector('.container');
+  if(!siteHeader || !row || !container){
+    releaseBackToCatsDock();
+    return;
+  }
+  const headerRect = siteHeader.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const refRect = isDocked ? ph.getBoundingClientRect() : btn.getBoundingClientRect();
+  const hyst = 6;
+  /* Anclar cuando el hueco en flujo entra bajo el header del sitio (incl. pillbar). */
+  const shouldDock = isDocked
+    ? (refRect.top < headerRect.bottom + hyst)
+    : (refRect.top < headerRect.bottom - hyst);
+  const contRect = container.getBoundingClientRect();
+  const padLeft = parseFloat(getComputedStyle(container).paddingLeft) || 16;
+
+  if(shouldDock){
+    if(!isDocked){
+      ph.style.display = 'inline-block';
+      ph.style.width = `${btn.offsetWidth}px`;
+      ph.style.height = `${btn.offsetHeight}px`;
+      ph.style.verticalAlign = 'middle';
+      ph.style.visibility = 'hidden';
+      ph.style.pointerEvents = 'none';
+      ph.setAttribute('aria-hidden', 'true');
+    }
+    btn.classList.add('is-header-docked');
+    const top = rowRect.top + Math.max(0, (rowRect.height - btn.offsetHeight) / 2);
+    btn.style.top = `${Math.round(top)}px`;
+    btn.style.left = `${Math.round(contLeftSafe(contRect, padLeft))}px`;
+  } else {
+    releaseBackToCatsDock();
+  }
+}
+function contLeftSafe(contRect, padLeft){
+  const raw = contRect.left + padLeft;
+  if(!Number.isFinite(raw)) return 16;
+  return Math.max(8, raw);
+}
+function scheduleBackToCatsDock(){
+  if(backToCatsDockRaf != null) return;
+  backToCatsDockRaf = requestAnimationFrame(()=>{
+    backToCatsDockRaf = null;
+    updateBackToCatsDock();
+  });
 }
 
 /************ NAVEGACIÓN DE VISTAS ************/
@@ -864,6 +956,14 @@ function showView(v){
   }
   
   renderCategories();
+
+  if(v === 'products'){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=> scheduleBackToCatsDock());
+    });
+  } else {
+    releaseBackToCatsDock();
+  }
 }
 
 /************ CARRITO ************/
@@ -1361,6 +1461,19 @@ async function buildWhatsAppURL(){
 async function init(){
   // Nombre base
   $('#storeName').textContent = STORE.name;
+
+  window.addEventListener('scroll', scheduleBackToCatsDock, {passive:true});
+  window.addEventListener('resize', scheduleBackToCatsDock);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleBackToCatsDock);
+    window.visualViewport.addEventListener('scroll', scheduleBackToCatsDock);
+  }
+  if(typeof ResizeObserver !== 'undefined'){
+    const backBtn = $('#backToCatsBtn');
+    if(backBtn){
+      new ResizeObserver(()=> scheduleBackToCatsDock()).observe(backBtn);
+    }
+  }
 
   // Buscar: funciona en vista de productos y búsqueda global en categorías
   $('#searchInput').addEventListener('input', async e=>{
