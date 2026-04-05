@@ -206,11 +206,11 @@ function getShippingLine(subtotal){
   return `${opt.label} — ${fmt.format(price)}`;
 }
 
-// TU endpoint de Apps Script (termina en /exec)
-const PRODUCTS_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
+// Base para JSON estático del catálogo (generado por appscript-publish.js)
+const DATA_BASE = 'data';
 
-// Endpoint para guardar pedidos (spreadsheet separado)
-// IMPORTANTE: Reemplazá esta URL con la de tu deployment después de implementar appscript-pedidos.js
+// Apps Script sigue usándose SOLO para escritura (pedidos) y búsqueda global
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbwUASjYtO2KxF2d-sB1d4VEjnxEtCXekarKIWslvec1wyjjRfsCFI7z-fYE0PFaTNjfqQ/exec';
 
 /**
@@ -480,19 +480,18 @@ function sanitizeCatalog(data){
 
 /************ FETCH ************/
 async function fetchPlacesMeta(){
-  // Mostrar skeleton mientras carga lugares
   showPlacesSkeleton();
-  
   let safeList = [
     { id: 'santafe', name: 'Santa Fe' },
     { id: 'buenosaires', name: 'Buenos Aires' }
   ];
-  try{
-    const res = await fetch(`${PRODUCTS_URL}?meta=places&bust=${Date.now()}`, { cache:'no-store' });
+  try {
+    const res = await fetch(`${DATA_BASE}/places.json`);
     const data = await res.json();
-    const looksOk = Array.isArray(data) && data.length &&
-      data.every(x => x && typeof x.id === 'string' && typeof x.name === 'string');
-    if (looksOk) safeList = data;
+    if (Array.isArray(data) && data.length &&
+        data.every(x => x && typeof x.id === 'string' && typeof x.name === 'string')) {
+      safeList = data;
+    }
   } catch(e){
     console.warn('Usando fallback de lugares:', e);
   }
@@ -501,63 +500,49 @@ async function fetchPlacesMeta(){
 }
 
 async function fetchCategoriesForPlace(placeId){
-  // Mostrar skeleton mientras carga
   if (state.view === 'home') showCategoriesSkeleton();
-  
+
   const cacheKey = `categories_v2__${placeId}`;
-  // 1) cache local con expiración de 24 horas
   const cached = getCacheWithExpiry(cacheKey);
   if (cached) {
     DATA = cached;
     INDEX = Object.keys(DATA);
-    if (state.view === 'home') {
-      await renderHomeCats();
-      scrollAppToTop();
-    }
+    if (state.view === 'home') { await renderHomeCats(); scrollAppToTop(); }
     return;
   }
 
-  // 2) pedir fresco - solo categorías
-  const res = await fetch(`${PRODUCTS_URL}?action=categories&place=${encode(placeId)}&bust=${Date.now()}`, { cache:'no-store' });
+  const res = await fetch(`${DATA_BASE}/${placeId}/categories.json`);
   const fresh = await res.json();
-  
-  // Debug: mostrar qué datos llegaron
-  console.log('📊 Datos de categorías recibidos:', fresh);
-  console.log('📝 Nombres de categorías:', Object.keys(fresh));
-  
+
   DATA = fresh;
   INDEX = Object.keys(DATA);
   setCacheWithExpiry(cacheKey, DATA);
-  if (state.view === 'home') {
-    await renderHomeCats();
-    scrollAppToTop();
-  }
+  if (state.view === 'home') { await renderHomeCats(); scrollAppToTop(); }
 }
 
 async function fetchProductsForCategory(placeId, category){
-  // Mostrar skeleton mientras carga productos
   showProductsSkeleton();
-  
+
   const cacheKey = `products_v2__${placeId}__${category}`;
-  // 1) cache local con expiración de 24 horas
   const cached = getCacheWithExpiry(cacheKey);
   if (cached) {
     DATA[category] = { ...DATA[category], items: cached };
     renderGrid();
-    if(state.view === 'products') scrollAppToTop();
+    if (state.view === 'products') scrollAppToTop();
     return;
   }
 
-  // 2) pedir fresco - productos de una categoría
-  const res = await fetch(`${PRODUCTS_URL}?action=products&place=${encode(placeId)}&category=${encode(category)}&bust=${Date.now()}`, { cache:'no-store' });
+  const slug = (DATA[category] && DATA[category].slug)
+    || category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+         .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const res = await fetch(`${DATA_BASE}/${placeId}/products/${slug}.json`);
   const products = await res.json();
   setCacheWithExpiry(cacheKey, products);
-  
-  // Actualizar DATA con los productos cargados
+
   if (!DATA[category]) DATA[category] = {};
   DATA[category].items = products;
   renderGrid();
-  if(state.view === 'products') scrollAppToTop();
+  if (state.view === 'products') scrollAppToTop();
 }
 
 async function performGlobalSearch(query) {
@@ -567,8 +552,8 @@ async function performGlobalSearch(query) {
   showCategoriesSkeleton();
   
   try {
-    const url = `${PRODUCTS_URL}?action=search&place=${state.place}&q=${encode(query)}&bust=${Date.now()}`;
-    const resp = await fetch(url, { cache:'no-store' });
+    const url = `${APPS_SCRIPT_URL}?action=search&place=${state.place}&q=${encode(query)}`;
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     
     const products = await resp.json();
