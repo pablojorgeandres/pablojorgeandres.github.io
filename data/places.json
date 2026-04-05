@@ -1,4 +1,1 @@
-[
-  { "id": "santafe", "name": "Santa Fe" },
-  { "id": "buenosaires", "name": "Buenos Aires" }
-]
+[{"id":"santafe","name":"Santa Fe"},{"id":"buenosaires","name":"Buenos Aires"}]
