@@ -1,0 +1,60 @@
+---
+description: Nimú architecture — static catalog, Apps Script, and cache. Always load this context.
+alwaysApply: true
+---
+
+# Nimú architecture (agent memory)
+
+Full detail: [`ARCHITECTURE.md`](../../ARCHITECTURE.md). Read it before changing data loading, Apps Script, or cache.
+
+## What this is
+
+Static vanilla storefront: `index.html` + `styles.css`. No framework, no build. Catalog = static JSON in `data/`. Google Sheets = source of truth. Apps Script source lives in `resources/` (manual sync to GAS editor).
+
+Needs HTTP server locally (`python3 -m http.server 8000`).
+
+## Pipeline
+
+```
+Sheets → publishCatalog() ~15min → GitHub data/*.json → fetch() → UI (+ localStorage 24h)
+Sheets → doGet search → APPS_SCRIPT_URL (CacheService 5min)
+Cart → WhatsApp + form POST ORDERS_URL
+       → findOrCreateClientCode_ (contacts SF/BA) → orders sheet (+ CodCliente)
+```
+
+## Endpoints (`index.html`)
+
+- `DATA_BASE = 'data'`
+- `APPS_SCRIPT_URL` — search only (`?action=search&place=&q=`)
+- `ORDERS_URL` — order POST (`appscript-pedidos.js`)
+
+Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS_URL` only.
+
+## Cache
+
+| Layer | Where | TTL | Keys |
+|-------|-------|-----|------|
+| Client | `localStorage` | 24h | `categories_v2__{place}`, `products_v2__{place}__{category}` |
+| Server | `CacheService` | 300s | `categories_v1_*`, `products_v1_*`, `search_v1_*` |
+| Static | GitHub `data/` | ~15min publish | places / categories / products JSON |
+
+- `clearCache()` clears catalog LS keys. Search is not client-cached.
+- Stale UI after publish: wait 24h, call `clearCache()`, or bump key version.
+
+## Scripts (`resources/`)
+
+| File | Role |
+|------|------|
+| `appscript.js` | Catalog API `doGet` + server cache; legacy `doPost` |
+| `appscript-publish.js` | `publishCatalog()` → GitHub (`GITHUB_TOKEN` etc.) |
+| `appscript-pedidos.js` | Orders writer: resolve CodCliente in contacts sheet, then append order |
+
+Places: `santafe`, `buenosaires` (sheet IDs in `appscript.js` `PLACES`).
+
+Contacts sheet `1Pyd9Bll_…`: tabs `DB CONTACTS SF` (`S#`) / `DB CONTACTS BA` (`B#`). Match phone then name; else create next code. Orders get `CodCliente` after Fecha. Redeploy GAS after editing `resources/appscript-pedidos.js`.
+
+## Do not
+
+- Trust README for `PRODUCTS_URL` / PWA / “open without server” (outdated).
+- Expect full `data/{place}/` or `imgs/` in every local clone (generated remotely).
+- Wire both order `doPost` paths without intent.
