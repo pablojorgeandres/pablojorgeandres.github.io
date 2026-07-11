@@ -8,6 +8,17 @@
     var(--bg);
 }
 
+/* display:grid/flex on panels overrides the UA [hidden] rule — force hide */
+.dash-login[hidden],
+.dash-shell[hidden],
+.dash-panel[hidden],
+.dash-fieldset [hidden],
+#remitoNewFields[hidden],
+#remitoExistingWrap[hidden],
+#remitoZoneWrap[hidden] {
+  display: none !important;
+}
+
 .dash-login {
   min-height: 100dvh;
   display: grid;

@@ -81,7 +81,7 @@ Contacts spreadsheet: `1Pyd9Bll_aa8liMzcrbaMOui15uzq8t-vM7Clu0MMRSY`
 | `santafe` | `DB CONTACTS SF` | `S` |
 | `buenosaires` | `DB CONTACTS BA` | `B` |
 
-Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL (vacío; sin AFIP/ARCA), F DNI.
+Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL (vacío; sin AFIP/ARCA), F DNI (solo al **crear** cliente nuevo en checkout/remito; no se actualiza si ya existe).
 
 ## Frontend endpoints (`js/config.js`)
 

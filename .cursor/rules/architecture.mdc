@@ -64,7 +64,7 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 
 Places: `santafe`, `buenosaires` (sheet IDs in `appscript.js` `PLACES`).
 
-Contacts sheet `1Pyd9Bll_…`: tabs `DB CONTACTS SF` (`S#`) / `DB CONTACTS BA` (`B#`). Match phone then name; else create next code. Orders get `CodCliente` after Fecha. If `customer.clientCode` is set (dashboard remito), reuse it. Redeploy GAS after editing `resources/appscript-pedidos.js`.
+Contacts sheet `1Pyd9Bll_…`: tabs `DB CONTACTS SF` (`S#`) / `DB CONTACTS BA` (`B#`). Match phone then name; else create next code with DNI in col F (solo altas; E CUIL vacío). Orders get `CodCliente` after Fecha and never store DNI. If `customer.clientCode` is set (dashboard remito), reuse it. Redeploy GAS after editing `resources/appscript-pedidos.js`.
 
 ## Do not
 

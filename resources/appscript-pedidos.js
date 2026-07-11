@@ -92,6 +92,18 @@ function normalizeName_(s) {
     .replace(/\s+/g, " ");
 }
 
+/** Solo dígitos del DNI/documento (checkout / remito). */
+function normalizeDni_(s) {
+  return String(s || "").replace(/\D/g, "");
+}
+
+function readCustomerDni_(customer) {
+  if (!customer) return "";
+  return normalizeDni_(
+    customer.dni || customer.DNI || customer.documento || customer.document || ""
+  );
+}
+
 /** Normaliza códigos tipo s110 / S110 → S110 */
 function normalizeClientCode_(code) {
   const s = String(code || "").trim();
@@ -126,8 +138,32 @@ function cachePutJson_(key, obj) {
 }
 
 /**
+ * Asegura headers A–F en contactos (E=CUIL vacío, F=DNI).
+ * No toca la fila 1 si ya es un cliente (código S#/B#).
+ */
+function ensureContactsHeaders_(sheet) {
+  const headers = sheet.getRange(1, 1, 1, 6).getValues()[0];
+  if (isValidClientCode_(normalizeClientCode_(headers[0]))) return;
+
+  const expected = ["", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"];
+  let dirty = false;
+  for (let i = 0; i < 6; i++) {
+    if (!String(headers[i] || "").trim() && expected[i]) {
+      headers[i] = expected[i];
+      dirty = true;
+    }
+  }
+  if (String(headers[5] || "").trim().toUpperCase() !== "DNI") {
+    headers[5] = "DNI";
+    dirty = true;
+  }
+  if (dirty) sheet.getRange(1, 1, 1, 6).setValues([headers]);
+}
+
+/**
  * Busca cliente por teléfono (prioridad) o nombre; si no existe, crea fila
  * con el siguiente código (S# / B#) en el tab correspondiente.
+ * DNI solo se escribe al crear un cliente nuevo (col F). No se actualiza en matches.
  */
 function findOrCreateClientCode_(place, customer) {
   const cfg = CONTACT_SHEETS[place];
@@ -143,6 +179,8 @@ function findOrCreateClientCode_(place, customer) {
     sheet.getRange(1, 1, 1, 6).setValues([[
       "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"
     ]]);
+  } else {
+    ensureContactsHeaders_(sheet);
   }
 
   const lastRow = sheet.getLastRow();
@@ -163,7 +201,7 @@ function findOrCreateClientCode_(place, customer) {
       }
     }
 
-    // Match por teléfono primero
+    // Match por teléfono primero — no tocar DNI de existentes
     if (phoneNeedle) {
       for (let i = 0; i < values.length; i++) {
         const code = String(values[i][0] || "").trim();
@@ -175,7 +213,7 @@ function findOrCreateClientCode_(place, customer) {
       }
     }
 
-    // Match por nombre
+    // Match por nombre — no tocar DNI de existentes
     if (nameNeedle) {
       for (let i = 0; i < values.length; i++) {
         const code = String(values[i][0] || "").trim();
@@ -188,7 +226,7 @@ function findOrCreateClientCode_(place, customer) {
     }
   }
 
-  // Crear nuevo — CUIL (E) vacío; DNI (F) desde checkout
+  // Crear nuevo — CUIL (E) vacío; DNI (F) desde checkout (solo alta)
   const nextNum = maxNum + 1;
   const newCode = cfg.prefix + nextNum;
   const area = String(customer.area || "").trim();
@@ -196,16 +234,21 @@ function findOrCreateClientCode_(place, customer) {
   const locality = area && address ? (area + " - " + address) : (area || address);
   const phone = String(customer.phone || "").trim();
   const telefonoCell = phone ? ("CELU: " + phone) : "";
-  const dni = String(customer.dni || "").trim();
+  const dni = readCustomerDni_(customer);
 
-  sheet.appendRow([
+  const newRow = Math.max(sheet.getLastRow(), 1) + 1;
+  // setValues (no appendRow) para garantizar col F = DNI
+  sheet.getRange(newRow, 1, newRow, 6).setValues([[
     newCode,
     locality,
     String(customer.name || "").trim(),
     telefonoCell,
     "",  // CUIL (sin AFIP/ARCA)
     dni
-  ]);
+  ]]);
+  if (dni) {
+    sheet.getRange(newRow, 6).setNumberFormat("@").setValue(dni);
+  }
 
   return newCode;
 }
@@ -319,12 +362,12 @@ function isEmptyOrderSeparatorRow_(row) {
   const fecha = String(row[0] || "").trim();
   const codCliente = String(row[1] || "").trim();
   const nombre = String(row[2] || "").trim();
-  // fila vacía o solo " " en fecha
   return !fecha || fecha === " " || (!codCliente && !nombre && fecha === " ");
 }
 
 /**
  * Parsea filas del sheet de pedidos en bloques {timestamp, clientCode, customer, items}.
+ * Columnas: Fecha, CodCliente, Nombre, Teléfono, Dirección, Zona, Lugar, Notas, Producto, Código, Cantidad.
  */
 function parseOrdersFromRows_(values) {
   const orders = [];
@@ -339,7 +382,6 @@ function parseOrdersFromRows_(values) {
 
   for (let i = 0; i < values.length; i++) {
     const row = values[i];
-    // Skip header-like first row if present
     if (i === 0 && String(row[0] || "").toLowerCase().indexOf("fecha") === 0) {
       continue;
     }
@@ -369,7 +411,6 @@ function parseOrdersFromRows_(values) {
         items: []
       };
     } else if (!current) {
-      // Item huérfano: empezar bloque mínimo
       current = {
         timestamp: "",
         clientCode: "",
@@ -586,7 +627,7 @@ function saveOrder_(orderData) {
   // 1. Separador inicial
   sheet.appendRow(EMPTY_ORDER_ROW.slice());
 
-  // 2. Una fila por producto
+  // 2. Una fila por producto (sin DNI)
   items.forEach((item, index) => {
     let row;
 
