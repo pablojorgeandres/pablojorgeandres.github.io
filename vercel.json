@@ -10,7 +10,13 @@
       ]
     },
     {
-      "source": "/(dashboard.css|js/(.*))",
+      "source": "/dashboard.css",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/js/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
