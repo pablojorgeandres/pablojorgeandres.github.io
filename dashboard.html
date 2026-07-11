@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Nimú — Dashboard</title>
+  <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body class="dash-body">
+  <section id="loginView" class="dash-login">
+    <form id="loginForm" class="dash-login-card" autocomplete="on">
+      <div class="dash-login-brand">
+        <img src="imgs/nimuicon.jpg" alt="" class="dash-login-icon" />
+        <h1>Nimú Dashboard</h1>
+      </div>
+      <p class="muted">Ingresá para gestionar clientes y remitos.</p>
+      <label class="dash-field">
+        <span>Usuario</span>
+        <input id="loginUser" name="username" type="text" autocomplete="username" required />
+      </label>
+      <label class="dash-field">
+        <span>Contraseña</span>
+        <input id="loginPass" name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="loginError" class="dash-error" hidden></p>
+      <button type="submit" class="btn primary dash-login-btn">Entrar</button>
+      <a class="dash-back-store" href="index.html">← Volver a la tienda</a>
+    </form>
+  </section>
+
+  <div id="appShell" class="dash-shell" hidden>
+    <header class="dash-top">
+      <div class="dash-top-brand">
+        <img src="imgs/nimuicon.jpg" alt="" class="dash-top-icon" />
+        <strong>Dashboard</strong>
+      </div>
+      <nav class="dash-nav" aria-label="Secciones">
+        <button type="button" class="dash-nav-btn is-active" data-view="clients">Clientes</button>
+      </nav>
+      <div class="dash-top-actions">
+        <label class="dash-place-label">
+          <span class="muted">Lugar</span>
+          <select id="placeSelect" class="select" aria-label="Lugar"></select>
+        </label>
+        <button type="button" class="btn" id="logoutBtn">Salir</button>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <!-- Lista clientes -->
+      <section id="clientsView" class="dash-panel">
+        <div class="dash-toolbar">
+          <h2>Clientes</h2>
+          <div class="dash-toolbar-actions">
+            <input id="clientSearch" type="search" class="dash-search" placeholder="Buscar por nombre, teléfono o código…" />
+            <button type="button" class="btn primary" id="newRemitoBtn">Nuevo remito</button>
+          </div>
+        </div>
+        <p id="clientsStatus" class="muted dash-status"></p>
+        <div class="dash-table-wrap">
+          <table class="dash-table" id="clientsTable">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Localidad</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clientsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Detalle cliente -->
+      <section id="clientDetailView" class="dash-panel" hidden>
+        <div class="dash-toolbar">
+          <button type="button" class="linkbtn" id="backToClientsBtn">← Clientes</button>
+          <button type="button" class="btn primary" id="remitoFromClientBtn">Agregar pedido / remito</button>
+        </div>
+        <div id="clientDetailCard" class="dash-detail-card"></div>
+        <h3 class="dash-section-title">Pedidos asociados</h3>
+        <p id="ordersStatus" class="muted dash-status"></p>
+        <div id="ordersList" class="dash-orders"></div>
+      </section>
+
+      <!-- Remito -->
+      <section id="remitoView" class="dash-panel" hidden>
+        <div class="dash-toolbar">
+          <button type="button" class="linkbtn" id="backFromRemitoBtn">← Volver</button>
+          <h2 id="remitoTitle">Nuevo remito</h2>
+        </div>
+
+        <div class="dash-remito-grid">
+          <fieldset class="dash-fieldset">
+            <legend>Cliente</legend>
+            <label class="dash-check">
+              <input type="checkbox" id="remitoNewClient" />
+              Cliente no está en la tienda (cargar datos manualmente)
+            </label>
+            <div id="remitoExistingWrap">
+              <p id="remitoClientSummary" class="dash-client-summary muted">Seleccioná un cliente desde la lista, o marcá cliente nuevo.</p>
+            </div>
+            <div id="remitoNewFields" hidden>
+              <label class="dash-field"><span>Nombre *</span><input id="remitoName" type="text" /></label>
+              <label class="dash-field"><span>Dirección</span><input id="remitoAddress" type="text" /></label>
+              <label class="dash-field"><span>Barrio / Localidad</span><input id="remitoArea" type="text" /></label>
+              <label class="dash-field"><span>DNI</span><input id="remitoDni" type="text" inputmode="numeric" /></label>
+            </div>
+            <label class="dash-field">
+              <span>Teléfono WhatsApp *</span>
+              <input id="remitoPhone" type="tel" inputmode="tel" placeholder="Ej. 3425123456" />
+            </label>
+            <p id="remitoPhoneHint" class="muted dash-hint"></p>
+            <label class="dash-field">
+              <span>Notas / observaciones</span>
+              <textarea id="remitoNotes" rows="2"></textarea>
+            </label>
+            <label class="dash-field" id="remitoZoneWrap">
+              <span>Entrega</span>
+              <select id="remitoZone" class="select"></select>
+            </label>
+          </fieldset>
+
+          <fieldset class="dash-fieldset">
+            <legend>Productos</legend>
+            <div class="dash-product-add">
+              <input id="remitoProductSearch" type="search" class="dash-search" placeholder="Buscar por código o nombre…" list="remitoProductList" />
+              <datalist id="remitoProductList"></datalist>
+              <input id="remitoQty" type="number" min="1" value="1" class="dash-qty" aria-label="Cantidad" />
+              <button type="button" class="btn primary" id="remitoAddProductBtn">Agregar</button>
+            </div>
+            <p id="catalogStatus" class="muted dash-status"></p>
+            <div class="dash-table-wrap">
+              <table class="dash-table" id="remitoItemsTable">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th>Precio</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="remitoItemsBody"></tbody>
+              </table>
+            </div>
+            <div class="dash-totals-box">
+              <div class="row"><span>Subtotal</span><strong id="remitoSubtotal">$0</strong></div>
+              <div class="row"><span>Envío</span><strong id="remitoShipping">$0</strong></div>
+              <div class="row"><span>Total</span><strong id="remitoTotal">$0</strong></div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="dash-remito-actions">
+          <p id="remitoError" class="dash-error" hidden></p>
+          <button type="button" class="btn primary" id="remitoSubmitBtn">Guardar y enviar por WhatsApp</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="appModal" class="app-modal" aria-labelledby="appModalMessage">
+    <div class="app-modal-panel">
+      <p id="appModalMessage" class="app-modal-message"></p>
+      <div class="app-modal-actions">
+        <button type="button" class="btn app-modal-cancel" id="appModalCancel" hidden>Cancelar</button>
+        <button type="button" class="btn primary app-modal-ok" id="appModalOk">Aceptar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="js/config.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/orders-api.js"></script>
+  <script src="js/whatsapp.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

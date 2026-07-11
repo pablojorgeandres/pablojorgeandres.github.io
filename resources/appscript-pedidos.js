@@ -1,11 +1,16 @@
 /**
- * Apps Script para Guardar Pedidos
+ * Apps Script para Guardar Pedidos (+ lectura clients/orders para dashboard)
  * Este script debe ser copiado en el editor de Apps Script del spreadsheet de pedidos
  * URL del spreadsheet: https://docs.google.com/spreadsheets/d/1-926t3YP4ZEf1xWyGA-IlsDm3JmxNn5eJRd-JayRafs/edit
  *
  * Al guardar un pedido:
  *  1. Busca o crea el cliente en el sheet de contactos (CodCliente S# / B#)
+ *     — o usa customer.clientCode si viene del dashboard
  *  2. Escribe el pedido con CodCliente a la derecha de Fecha y Hora
+ *
+ * doGet:
+ *  ?action=clients&place=santafe|buenosaires
+ *  ?action=orders&place=…&clientCode=S123  (clientCode opcional; q opcional)
  *
  * Deploy: pegar este archivo en el proyecto GAS de pedidos, asegurar acceso de
  * edición al sheet de contactos, y publicar una nueva versión del Web App.
@@ -14,6 +19,7 @@
 /** CONFIG **/
 const SPREADSHEET_ID = "1-926t3YP4ZEf1xWyGA-IlsDm3JmxNn5eJRd-JayRafs";
 const CONTACTS_SPREADSHEET_ID = "1Pyd9Bll_aa8liMzcrbaMOui15uzq8t-vM7Clu0MMRSY";
+const READ_CACHE_TTL_SEC = 90;
 
 // Mapeo de lugares a nombres de pestañas de pedidos
 const PLACE_SHEETS = {
@@ -92,6 +98,31 @@ function normalizeClientCode_(code) {
   const m = s.match(/^([SBsb])(\d+)$/);
   if (!m) return s;
   return m[1].toUpperCase() + m[2];
+}
+
+function isValidClientCode_(code) {
+  return /^[SB]\d+$/.test(String(code || ""));
+}
+
+function cacheGetJson_(key) {
+  try {
+    const raw = CacheService.getScriptCache().get(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function cachePutJson_(key, obj) {
+  try {
+    const raw = JSON.stringify(obj);
+    // CacheService max ~100KB per entry; skip if too large
+    if (raw.length > 90000) return;
+    CacheService.getScriptCache().put(key, raw, READ_CACHE_TTL_SEC);
+  } catch (e) {
+    // ignore
+  }
 }
 
 /**
@@ -180,6 +211,286 @@ function findOrCreateClientCode_(place, customer) {
 }
 
 /**
+ * Si el contacto existe y no tiene teléfono, completa con el del pedido (dashboard remito).
+ */
+function maybeUpdateContactPhone_(place, clientCode, phone) {
+  const phoneStr = String(phone || "").trim();
+  if (!phoneStr || !isValidClientCode_(clientCode)) return;
+
+  const cfg = CONTACT_SHEETS[place];
+  if (!cfg) return;
+
+  const ss = SpreadsheetApp.openById(CONTACTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(cfg.tab);
+  if (!sheet) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) return;
+
+  const values = sheet.getRange(1, 1, lastRow, 4).getValues();
+  const needle = normalizeClientCode_(clientCode);
+  for (let i = 0; i < values.length; i++) {
+    const code = normalizeClientCode_(values[i][0]);
+    if (code !== needle) continue;
+    const existing = normalizePhone_(values[i][3]);
+    if (!existing) {
+      sheet.getRange(i + 1, 4).setValue("CELU: " + phoneStr);
+    }
+    return;
+  }
+}
+
+function resolveClientCode_(place, customer, orderData) {
+  const raw =
+    (customer && (customer.clientCode || customer.codCliente)) ||
+    (orderData && (orderData.clientCode || orderData.codCliente)) ||
+    "";
+  const explicit = normalizeClientCode_(raw);
+  if (isValidClientCode_(explicit)) {
+    maybeUpdateContactPhone_(place, explicit, customer && customer.phone);
+    return explicit;
+  }
+  return findOrCreateClientCode_(place, customer || {});
+}
+
+/**
+ * Lista clientes del tab de contactos del lugar.
+ */
+function listClients_(place) {
+  const cfg = CONTACT_SHEETS[place];
+  if (!cfg) {
+    return { error: "place inválido", validPlaces: Object.keys(CONTACT_SHEETS) };
+  }
+
+  const cacheKey = "clients_v1_" + place;
+  const cached = cacheGetJson_(cacheKey);
+  if (cached) return cached;
+
+  const ss = SpreadsheetApp.openById(CONTACTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(cfg.tab);
+  if (!sheet) {
+    const empty = { place: place, clients: [] };
+    cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) {
+    const empty = { place: place, clients: [] };
+    cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const values = sheet.getRange(1, 1, lastRow, 6).getValues();
+  const clients = [];
+
+  for (let i = 0; i < values.length; i++) {
+    const code = normalizeClientCode_(values[i][0]);
+    if (!isValidClientCode_(code)) continue;
+    clients.push({
+      code: code,
+      locality: String(values[i][1] || "").trim(),
+      name: String(values[i][2] || "").trim(),
+      phone: String(values[i][3] || "").trim(),
+      cuil: String(values[i][4] || "").trim(),
+      dni: String(values[i][5] || "").trim()
+    });
+  }
+
+  // Códigos más altos primero
+  clients.sort(function (a, b) {
+    const na = parseInt(a.code.slice(1), 10) || 0;
+    const nb = parseInt(b.code.slice(1), 10) || 0;
+    return nb - na;
+  });
+
+  const out = { place: place, clients: clients };
+  cachePutJson_(cacheKey, out);
+  return out;
+}
+
+function isEmptyOrderSeparatorRow_(row) {
+  // Separador: casi todo vacío / solo espacios en col 0
+  const product = String(row[8] || "").trim();
+  const code = String(row[9] || "").trim();
+  const qty = row[10];
+  const hasProduct = !!(product || code || (qty !== "" && qty != null && Number(qty) !== 0));
+  if (hasProduct) return false;
+  const fecha = String(row[0] || "").trim();
+  const codCliente = String(row[1] || "").trim();
+  const nombre = String(row[2] || "").trim();
+  // fila vacía o solo " " en fecha
+  return !fecha || fecha === " " || (!codCliente && !nombre && fecha === " ");
+}
+
+/**
+ * Parsea filas del sheet de pedidos en bloques {timestamp, clientCode, customer, items}.
+ */
+function parseOrdersFromRows_(values) {
+  const orders = [];
+  let current = null;
+
+  function pushCurrent() {
+    if (current && current.items && current.items.length) {
+      orders.push(current);
+    }
+    current = null;
+  }
+
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    // Skip header-like first row if present
+    if (i === 0 && String(row[0] || "").toLowerCase().indexOf("fecha") === 0) {
+      continue;
+    }
+
+    if (isEmptyOrderSeparatorRow_(row)) {
+      pushCurrent();
+      continue;
+    }
+
+    const fecha = String(row[0] || "").trim();
+    const clientCode = normalizeClientCode_(row[1]);
+    const hasHeader = !!(fecha && fecha !== " ") || isValidClientCode_(clientCode) || String(row[2] || "").trim();
+
+    if (hasHeader && (fecha || isValidClientCode_(clientCode))) {
+      pushCurrent();
+      current = {
+        timestamp: fecha,
+        clientCode: isValidClientCode_(clientCode) ? clientCode : "",
+        customer: {
+          name: String(row[2] || "").trim(),
+          phone: String(row[3] || "").trim(),
+          address: String(row[4] || "").trim(),
+          area: String(row[5] || "").trim(),
+          notes: String(row[7] || "").trim()
+        },
+        placeName: String(row[6] || "").trim(),
+        items: []
+      };
+    } else if (!current) {
+      // Item huérfano: empezar bloque mínimo
+      current = {
+        timestamp: "",
+        clientCode: "",
+        customer: { name: "", phone: "", address: "", area: "", notes: "" },
+        placeName: "",
+        items: []
+      };
+    }
+
+    const itemName = String(row[8] || "").trim();
+    const itemCode = String(row[9] || "").trim();
+    const itemQty = row[10];
+    if (itemName || itemCode || (itemQty !== "" && itemQty != null)) {
+      current.items.push({
+        name: itemName,
+        code: itemCode,
+        qty: Number(itemQty) || 0
+      });
+    }
+  }
+  pushCurrent();
+  return orders;
+}
+
+function listOrders_(place, clientCode, q) {
+  const sheetName = PLACE_SHEETS[place];
+  if (!sheetName) {
+    return { error: "place inválido", validPlaces: Object.keys(PLACE_SHEETS) };
+  }
+
+  const codeFilter = clientCode ? normalizeClientCode_(clientCode) : "";
+  const qNorm = String(q || "").trim().toLowerCase();
+  const cacheKey =
+    "orders_v1_" + place + "_" + (codeFilter || "all") + "_" + (qNorm || "");
+
+  // Solo cachear listados sin filtro de texto (q cambia mucho)
+  if (!qNorm) {
+    const cached = cacheGetJson_(cacheKey);
+    if (cached) return cached;
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    const empty = { place: place, orders: [] };
+    if (!qNorm) cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) {
+    const empty = { place: place, orders: [] };
+    if (!qNorm) cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const values = sheet.getRange(1, 1, lastRow, 11).getValues();
+  let orders = parseOrdersFromRows_(values);
+
+  if (codeFilter && isValidClientCode_(codeFilter)) {
+    orders = orders.filter(function (o) {
+      return normalizeClientCode_(o.clientCode) === codeFilter;
+    });
+  }
+
+  if (qNorm) {
+    orders = orders.filter(function (o) {
+      const blob = [
+        o.timestamp,
+        o.clientCode,
+        o.customer && o.customer.name,
+        o.customer && o.customer.phone,
+        o.customer && o.customer.notes,
+        (o.items || []).map(function (it) { return it.name + " " + it.code; }).join(" ")
+      ].join(" ").toLowerCase();
+      return blob.indexOf(qNorm) !== -1;
+    });
+  }
+
+  // Más recientes primero
+  orders.reverse();
+
+  const out = { place: place, orders: orders };
+  if (!qNorm) cachePutJson_(cacheKey, out);
+  return out;
+}
+
+/**
+ * Lectura para dashboard: clients | orders
+ */
+function doGet(e) {
+  try {
+    const p = (e && e.parameter) || {};
+    const action = String(p.action || "").toLowerCase();
+    const place = String(p.place || "").toLowerCase();
+
+    if (action === "clients") {
+      if (!place) return jsonOut_({ error: "Falta place" });
+      return jsonOut_(listClients_(place));
+    }
+
+    if (action === "orders") {
+      if (!place) return jsonOut_({ error: "Falta place" });
+      return jsonOut_(listOrders_(place, p.clientCode, p.q));
+    }
+
+    return jsonOut_({
+      error: "Acción inválida",
+      validActions: ["clients", "orders"],
+      examples: [
+        "?action=clients&place=santafe",
+        "?action=orders&place=santafe&clientCode=S1"
+      ]
+    });
+  } catch (err) {
+    console.error("Error en doGet:", err);
+    return jsonOut_({ error: String(err) });
+  }
+}
+
+/**
  * Handler para guardar pedidos (POST desde formulario)
  */
 function doPost(e){
@@ -260,7 +571,17 @@ function saveOrder_(orderData) {
   const timestamp = formatTimestamp_(orderData.timestamp || new Date().toISOString());
   const customer = orderData.customer || {};
   const items = orderData.items || [];
-  const clientCode = findOrCreateClientCode_(orderData.place, customer);
+  const clientCode = resolveClientCode_(orderData.place, customer, orderData);
+
+  // Invalidar caches de lectura del lugar
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.remove("clients_v1_" + orderData.place);
+    cache.remove("orders_v1_" + orderData.place + "_all_");
+    if (clientCode) {
+      cache.remove("orders_v1_" + orderData.place + "_" + clientCode + "_");
+    }
+  } catch (e) {}
 
   // 1. Separador inicial
   sheet.appendRow(EMPTY_ORDER_ROW.slice());

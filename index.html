@@ -117,46 +117,32 @@
     </div>
   </dialog>
 
+<script src="js/config.js"></script>
+<script src="js/catalog.js"></script>
+<script src="js/orders-api.js"></script>
+<script src="js/whatsapp.js"></script>
 <script>
-/************ CONFIG ************/
-const STORE = {
-  name: 'Nimú - Consumo con sentido',
-  personalName: 'Anto',
-  phone: '5493425325683',
-  currency: 'ARS'
+/************ UTIL ************/
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const encode = s => encodeURIComponent(s);
+
+function loadCart(){ try{ return JSON.parse(localStorage.getItem('cart')) || []; } catch { return []; } }
+function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
+
+/************ DATA ************/
+let DATA = {};        // catálogo por categoría
+let INDEX = [];       // lista de categorías
+let PLACES_META = []; // [{id,name}]
+let state = {
+  view: 'places',     // 'places' | 'home' | 'products'
+  place: null,        // 'santafe' | 'buenosaires'
+  placeName: '',
+  category: null,     // null| 'Frutos Secos' | 'Todo'
+  search: '',
+  cart: loadCart(),
+  deliveryZone: ''
 };
-
-/** Zonas de entrega por lugar (pickup + Z1–Z3). BA: mismos montos placeholder hasta mapa/montos propios. */
-const PLACE_ZONE_CONFIG = {
-  santafe: {
-    mapImage: 'imgs/zonas_sf.jpg',
-    options: [
-      { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000 para ZONA 1' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000 para ZONA 2' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000 para ZONA 3' }
-    ]
-  },
-  buenosaires: {
-    mapImage: null,
-    options: [
-      { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000' }
-    ]
-  }
-};
-
-const ZONE_LS_PREFIX = 'deliveryZone__';
-
-function getPlaceZoneConfig(placeId){
-  return placeId ? PLACE_ZONE_CONFIG[placeId] : null;
-}
-
-function hasZoneDelivery(placeId){
-  return !!(placeId && PLACE_ZONE_CONFIG[placeId]);
-}
 
 function loadDeliveryZoneForPlace(placeId){
   if(!hasZoneDelivery(placeId)){
@@ -178,69 +164,16 @@ function saveDeliveryZoneForPlace(placeId){
 }
 
 function getCurrentZoneOption(){
-  const cfg = getPlaceZoneConfig(state.place);
-  if(!cfg || !state.deliveryZone) return null;
-  return cfg.options.find(o => o.id === state.deliveryZone) || null;
+  return getZoneOption(state.place, state.deliveryZone);
 }
 
-/** Precio numérico de envío según subtotal y zona. */
 function getShippingPrice(subtotal){
-  const opt = getCurrentZoneOption();
-  if(!opt) return 0;
-  if(opt.baseShip === 0 || opt.id === 'pickup') return 0;
-  if(opt.freeMin != null && subtotal >= opt.freeMin) return 0;
-  return opt.baseShip;
+  return getShippingPriceFor(state.place, state.deliveryZone, subtotal);
 }
 
-/** Texto de línea de envío para totales y pedidos. */
 function getShippingLine(subtotal){
-  const opt = getCurrentZoneOption();
-  if(!opt){
-    if(hasZoneDelivery(state.place)) return 'Entrega — elegí una opción';
-    return `Envío — ${fmt.format(0)}`;
-  }
-  const price = getShippingPrice(subtotal);
-  if(price === 0 && opt.id !== 'pickup' && opt.freeMin != null && subtotal >= opt.freeMin){
-    return `${opt.label} — ${fmt.format(0)} (gratis)`;
-  }
-  return `${opt.label} — ${fmt.format(price)}`;
+  return getShippingLineFor(state.place, state.deliveryZone, subtotal);
 }
-
-// Base para JSON estático del catálogo (generado por appscript-publish.js)
-const DATA_BASE = 'data';
-
-// Apps Script sigue usándose SOLO para escritura (pedidos) y búsqueda global
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
-const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxJBdbNLepOqVNgN5yvLjPO-gdo3g0nH0SagI4FrPRSOzHzDrcuKNusXEW0BjxS7U-Qug/exec';
-
-/**
- * Siluetas (placeholders) – reemplazá por tus contornos si querés.
- * Podés usar PNG/SVG externos o data-URIs.
- */
-const PLACE_SHAPES = {
-  santafe: 'https://drive.google.com/thumbnail?id=1o8eKJyWCRDHvVV2CbYHGxQbgmrcml0cg&sz=w800',
-  buenosaires: 'https://drive.google.com/thumbnail?id=11RLU0gQ7NDfTPZnKqEQT1F2qq_vaCAqK&sz=w800'
-};
-
-/************ DATA ************/
-let DATA = {};        // catálogo por categoría
-let INDEX = [];       // lista de categorías
-let PLACES_META = []; // [{id,name}]
-let state = {
-  view: 'places',     // 'places' | 'home' | 'products'
-  place: null,        // 'santafe' | 'buenosaires'
-  placeName: '',
-  category: null,     // null| 'Frutos Secos' | 'Todo'
-  search: '',
-  cart: loadCart(),
-  deliveryZone: ''
-};
-
-/************ UTIL ************/
-const fmt = new Intl.NumberFormat('es-AR', { style:'currency', currency: STORE.currency });
-const $ = sel => document.querySelector(sel);
-const $$ = sel => Array.from(document.querySelectorAll(sel));
-const encode = s => encodeURIComponent(s);
 
 /************ MODAL (reemplazo alert/confirm) ************/
 function openAppModal({ message, confirmMode }){
@@ -280,59 +213,12 @@ function appConfirm(message){
   return openAppModal({ message, confirmMode: true });
 }
 
-function loadCart(){ try{ return JSON.parse(localStorage.getItem('cart')) || []; } catch { return []; } }
-function saveCart(){ localStorage.setItem('cart', JSON.stringify(state.cart)); }
-
 function allItems(){ return INDEX.flatMap(cat => (DATA[cat]?.items)||[]); }
 
-// Función para limpiar cache (útil para debug)
 function clearCache() {
-  const keys = Object.keys(localStorage);
-  const removed = keys.filter(key => key.startsWith('categories_') || key.startsWith('products_') || key.startsWith('catalog_'));
-  removed.forEach(key => localStorage.removeItem(key));
-  console.log('🧹 Cache limpiado:', removed);
-  return removed.length;
-}
-
-// Cache con expiración de 24 horas
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
-
-function setCacheWithExpiry(key, data) {
-  const cacheItem = {
-    data: data,
-    timestamp: Date.now()
-  };
-  localStorage.setItem(key, JSON.stringify(cacheItem));
-}
-
-function getCacheWithExpiry(key) {
-  try {
-    const cached = localStorage.getItem(key);
-    if (!cached) return null;
-    
-    const cacheItem = JSON.parse(cached);
-    
-    // Si el formato es viejo (sin timestamp), tratarlo como expirado
-    if (!cacheItem.timestamp) {
-      return null;
-    }
-    
-    // Verificar si ha expirado (más de 24 horas)
-    const now = Date.now();
-    const age = now - cacheItem.timestamp;
-    
-    if (age > CACHE_EXPIRY_MS) {
-      // Cache expirado, eliminarlo
-      localStorage.removeItem(key);
-      return null;
-    }
-    
-    return cacheItem.data;
-  } catch (e) {
-    // Si hay error al parsear, tratar como expirado
-    console.warn('Cache corrupta, la ignoro', e);
-    return null;
-  }
+  const n = clearCatalogCache();
+  console.log('🧹 Cache limpiado:', n);
+  return n;
 }
 
 /************ SKELETON LOADING ************/
@@ -481,64 +367,22 @@ function sanitizeCatalog(data){
 /************ FETCH ************/
 async function fetchPlacesMeta(){
   showPlacesSkeleton();
-  let safeList = [
-    { id: 'santafe', name: 'Santa Fe' },
-    { id: 'buenosaires', name: 'Buenos Aires' }
-  ];
-  try {
-    const res = await fetch(`${DATA_BASE}/places.json`);
-    const data = await res.json();
-    if (Array.isArray(data) && data.length &&
-        data.every(x => x && typeof x.id === 'string' && typeof x.name === 'string')) {
-      safeList = data;
-    }
-  } catch(e){
-    console.warn('Usando fallback de lugares:', e);
-  }
-  PLACES_META = safeList;
+  PLACES_META = await fetchPlacesList();
   renderPlaces();
 }
 
 async function fetchCategoriesForPlace(placeId){
   if (state.view === 'home') showCategoriesSkeleton();
 
-  const cacheKey = `categories_v2__${placeId}`;
-  const cached = getCacheWithExpiry(cacheKey);
-  if (cached) {
-    DATA = cached;
-    INDEX = Object.keys(DATA);
-    if (state.view === 'home') { await renderHomeCats(); scrollAppToTop(); }
-    return;
-  }
-
-  const res = await fetch(`${DATA_BASE}/${placeId}/categories.json`);
-  const fresh = await res.json();
-
-  DATA = fresh;
+  DATA = await fetchCategoriesData(placeId);
   INDEX = Object.keys(DATA);
-  setCacheWithExpiry(cacheKey, DATA);
   if (state.view === 'home') { await renderHomeCats(); scrollAppToTop(); }
 }
 
 async function fetchProductsForCategory(placeId, category){
   showProductsSkeleton();
 
-  const cacheKey = `products_v2__${placeId}__${category}`;
-  const cached = getCacheWithExpiry(cacheKey);
-  if (cached) {
-    DATA[category] = { ...DATA[category], items: cached };
-    renderGrid();
-    if (state.view === 'products') scrollAppToTop();
-    return;
-  }
-
-  const slug = (DATA[category] && DATA[category].slug)
-    || category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-         .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const res = await fetch(`${DATA_BASE}/${placeId}/products/${slug}.json`);
-  const products = await res.json();
-  setCacheWithExpiry(cacheKey, products);
-
+  const products = await fetchProductsData(placeId, category, DATA);
   if (!DATA[category]) DATA[category] = {};
   DATA[category].items = products;
   renderGrid();
@@ -547,18 +391,9 @@ async function fetchProductsForCategory(placeId, category){
 
 async function performGlobalSearch(query) {
   const catsGrid = $('#catsGrid');
-  
-  // Mostrar skeleton mientras busca
   showCategoriesSkeleton();
-  
   try {
-    const url = `${APPS_SCRIPT_URL}?action=search&place=${state.place}&q=${encode(query)}`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    
-    const products = await resp.json();
-    
-    // Renderizar resultados como tarjetas de productos
+    const products = await searchProductsApi(state.place, query);
     renderSearchResults(products);
   } catch (err) {
     console.error('Error en búsqueda global:', err);
@@ -1343,18 +1178,17 @@ async function sendOrderToSheet(){
     console.warn('No hay lugar seleccionado');
     return { success: false, error: 'No hay lugar seleccionado' };
   }
-  
+
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
     return { success: false, error: 'Faltan nombre, dirección, DNI, teléfono o entrega' };
   }
-  
+
   const sub = subtotal();
   const ship = getShippingPrice(sub);
   const total = sub + ship;
   const zoneOpt = getCurrentZoneOption();
-  
-  // Preparar datos del pedido
+
   const orderData = {
     place: state.place,
     placeName: state.placeName,
@@ -1377,65 +1211,8 @@ async function sendOrderToSheet(){
     total: total,
     timestamp: new Date().toISOString()
   };
-  
-  return new Promise((resolve) => {
-    try {
-      // Crear iframe invisible para recibir respuesta
-      let iframe = document.getElementById('order-response-frame');
-      if(!iframe){
-        iframe = document.createElement('iframe');
-        iframe.id = 'order-response-frame';
-        iframe.name = 'order-response-frame';
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-      }
-      
-      // Listener para capturar respuesta del iframe
-      const messageHandler = (event) => {
-        // Validar origen si es necesario
-        if(event.data && typeof event.data === 'object'){
-          console.log('Respuesta recibida:', event.data);
-          window.removeEventListener('message', messageHandler);
-          resolve(event.data);
-        }
-      };
-      window.addEventListener('message', messageHandler);
-      
-      // Timeout de seguridad (10 segundos)
-      setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
-        resolve({ success: true, message: 'Pedido enviado (sin confirmación)' });
-      }, 10000);
-      
-      // Crear formulario
-      let form = document.getElementById('order-submit-form');
-      if(form) form.remove();
-      
-      form = document.createElement('form');
-      form.id = 'order-submit-form';
-      form.method = 'POST';
-      form.action = ORDERS_URL;
-      form.target = 'order-response-frame';
-      form.style.display = 'none';
-      
-      // Agregar campo con datos JSON
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'orderData';
-      input.value = JSON.stringify(orderData);
-      form.appendChild(input);
-      
-      // Agregar al DOM y enviar
-      document.body.appendChild(form);
-      
-      console.log('Enviando pedido:', orderData);
-      form.submit();
-      
-    } catch(err) {
-      console.error('Error al enviar pedido:', err);
-      resolve({ success: false, error: err.message });
-    }
-  });
+
+  return postOrderToSheet(orderData);
 }
 
 async function buildWhatsAppURL(){
@@ -1455,22 +1232,12 @@ async function buildWhatsAppURL(){
   }
   const sub = subtotal();
   const total = sub + getShippingPrice(sub);
-
-  // WhatsApp no soporta HTML; usa saltos de línea y *negrita*
-  const lines = [
-    `Hola ${STORE.personalName}! Quiero hacer un pedido:`,
-    '',
-    ...state.cart.map(i => `• ${i.name} (${i.variant}) x${i.qty} — ${fmt.format(i.price * i.qty)}`),
-    '',
-    `Subtotal: ${fmt.format(sub)}`,
-    `Envío: ${getShippingLine(sub)}`,
-    `*TOTAL: ${fmt.format(total)}*`,
-    '',
-    'Aguardo tu respuesta, gracias!',
-  ];
-
-  const msg = lines.join('%0A');
-  return `https://wa.me/${STORE.phone}?text=${msg}`;
+  return buildCustomerToStoreWhatsAppURL({
+    cart: state.cart,
+    subtotal: sub,
+    shippingLine: getShippingLine(sub),
+    total
+  });
 }
 
 /************ INIT ************/
