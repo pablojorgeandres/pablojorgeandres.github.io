@@ -69,22 +69,30 @@ function setLoggedIn(ok) {
   } catch (e) {}
 }
 
+function setVisible(el, visible) {
+  if (!el) return;
+  el.hidden = !visible;
+  el.classList.toggle('is-hidden', !visible);
+  if (visible) el.style.removeProperty('display');
+  else el.style.display = 'none';
+}
+
 function showLogin() {
-  $('#loginView').hidden = false;
-  $('#appShell').hidden = true;
+  setVisible($('#loginView'), true);
+  setVisible($('#appShell'), false);
 }
 
 function showApp() {
-  $('#loginView').hidden = true;
-  $('#appShell').hidden = false;
+  setVisible($('#loginView'), false);
+  setVisible($('#appShell'), true);
 }
 
 /************ Views ************/
 function showView(view) {
   state.view = view;
-  $('#clientsView').hidden = view !== 'clients';
-  $('#clientDetailView').hidden = view !== 'clientDetail';
-  $('#remitoView').hidden = view !== 'remito';
+  setVisible($('#clientsView'), view === 'clients');
+  setVisible($('#clientDetailView'), view === 'clientDetail');
+  setVisible($('#remitoView'), view === 'remito');
 }
 
 function phoneDigits(phone) {
@@ -223,8 +231,8 @@ function resetRemitoForm() {
   state.remitoCart = [];
   state.remitoIsNewClient = false;
   $('#remitoNewClient').checked = false;
-  $('#remitoNewFields').hidden = true;
-  $('#remitoExistingWrap').hidden = false;
+  setVisible($('#remitoNewFields'), false);
+  setVisible($('#remitoExistingWrap'), true);
   $('#remitoName').value = '';
   $('#remitoAddress').value = '';
   $('#remitoArea').value = '';
@@ -232,7 +240,7 @@ function resetRemitoForm() {
   $('#remitoPhone').value = '';
   $('#remitoNotes').value = '';
   $('#remitoPhoneHint').textContent = '';
-  $('#remitoError').hidden = true;
+  setVisible($('#remitoError'), false);
   $('#remitoProductSearch').value = '';
   $('#remitoQty').value = '1';
   renderRemitoItems();
@@ -243,11 +251,11 @@ function syncRemitoZoneSelect() {
   const sel = $('#remitoZone');
   const wrap = $('#remitoZoneWrap');
   if (!hasZoneDelivery(state.place)) {
-    wrap.hidden = true;
+    setVisible(wrap, false);
     sel.innerHTML = '';
     return;
   }
-  wrap.hidden = false;
+  setVisible(wrap, true);
   const cfg = getPlaceZoneConfig(state.place);
   sel.innerHTML =
     `<option value="">A coordinar</option>` +
@@ -258,8 +266,8 @@ function fillRemitoFromClient(client) {
   state.selectedClient = client;
   state.remitoIsNewClient = false;
   $('#remitoNewClient').checked = false;
-  $('#remitoNewFields').hidden = true;
-  $('#remitoExistingWrap').hidden = false;
+  setVisible($('#remitoNewFields'), false);
+  setVisible($('#remitoExistingWrap'), true);
   $('#remitoClientSummary').textContent = `${client.code} — ${client.name || 'Sin nombre'} · ${displayPhone(client.phone)}`;
   const phone = displayPhone(client.phone);
   const hasPhone = phoneDigits(phone).length >= 8;
@@ -296,8 +304,8 @@ async function openRemitoBlank() {
   resetRemitoForm();
   state.remitoIsNewClient = true;
   $('#remitoNewClient').checked = true;
-  $('#remitoNewFields').hidden = false;
-  $('#remitoExistingWrap').hidden = true;
+  setVisible($('#remitoNewFields'), true);
+  setVisible($('#remitoExistingWrap'), false);
   $('#remitoPhoneHint').textContent = 'Ingresá el celular del cliente para enviar el WhatsApp.';
   $('#remitoTitle').textContent = 'Nuevo remito';
   showView('remito');
@@ -446,22 +454,22 @@ function getRemitoCustomer() {
 
 async function submitRemito() {
   const errEl = $('#remitoError');
-  errEl.hidden = true;
+  setVisible(errEl, false);
 
   const customer = getRemitoCustomer();
   if (!customer.phone || phoneDigits(customer.phone).length < 8) {
     errEl.textContent = 'Ingresá un teléfono válido para enviar el WhatsApp.';
-    errEl.hidden = false;
+    setVisible(errEl, true);
     return;
   }
   if (state.remitoIsNewClient && !customer.name) {
     errEl.textContent = 'El nombre del cliente es obligatorio.';
-    errEl.hidden = false;
+    setVisible(errEl, true);
     return;
   }
   if (!state.remitoCart.length) {
     errEl.textContent = 'Agregá al menos un producto.';
-    errEl.hidden = false;
+    setVisible(errEl, true);
     return;
   }
 
@@ -530,7 +538,7 @@ async function submitRemito() {
   } catch (err) {
     console.error(err);
     errEl.textContent = 'Error: ' + (err.message || err);
-    errEl.hidden = false;
+    setVisible(errEl, true);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Guardar y enviar por WhatsApp';
@@ -559,12 +567,12 @@ function wireEvents() {
     const pass = String($('#loginPass').value || '');
     const err = $('#loginError');
     if (user === DASH_USER && pass === DASH_PASS) {
-      err.hidden = true;
+      setVisible(err, false);
       setLoggedIn(true);
       bootApp();
     } else {
       err.textContent = 'Usuario o contraseña incorrectos.';
-      err.hidden = false;
+      setVisible(err, true);
     }
   });
 
@@ -604,8 +612,8 @@ function wireEvents() {
 
   $('#remitoNewClient').addEventListener('change', (e) => {
     state.remitoIsNewClient = e.target.checked;
-    $('#remitoNewFields').hidden = !e.target.checked;
-    $('#remitoExistingWrap').hidden = e.target.checked;
+    setVisible($('#remitoNewFields'), e.target.checked);
+    setVisible($('#remitoExistingWrap'), !e.target.checked);
     if (e.target.checked) {
       state.selectedClient = null;
       $('#remitoPhoneHint').textContent = 'Ingresá el celular del cliente para enviar el WhatsApp.';

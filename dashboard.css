@@ -8,14 +8,15 @@
     var(--bg);
 }
 
-/* display:grid/flex on panels overrides the UA [hidden] rule — force hide */
+/* Never rely on bare [hidden] — display:grid/flex wins over UA rule */
 .dash-login[hidden],
 .dash-shell[hidden],
 .dash-panel[hidden],
 .dash-fieldset [hidden],
 #remitoNewFields[hidden],
 #remitoExistingWrap[hidden],
-#remitoZoneWrap[hidden] {
+#remitoZoneWrap[hidden],
+.is-hidden {
   display: none !important;
 }
 
