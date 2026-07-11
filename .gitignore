@@ -26,3 +26,4 @@ node_modules/
 coverage
 # Optional: Ignore images if they are large/generated, but uncomment if needed
 # imgs/
+.vercel
