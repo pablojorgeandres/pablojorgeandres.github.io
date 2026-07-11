@@ -76,7 +76,7 @@
         <input id="custDni" class="cart-drawer-field" placeholder="DNI *" inputmode="numeric" autocomplete="off" />
         <input id="custArea" class="cart-drawer-field" placeholder="Barrio / Localidad" />
         <input id="custAddress" class="cart-drawer-field" placeholder="Dirección (Calle - Provincia - CP) *" />
-        <input id="custPhone" class="cart-drawer-field" placeholder="Teléfono" />
+        <input id="custPhone" class="cart-drawer-field" placeholder="Teléfono *" autocomplete="tel" inputmode="tel" />
         <select id="zoneSelect" class="select cart-drawer-field" aria-label="Entrega" required></select>
         <textarea id="notes" class="notes cart-drawer-field" placeholder="Observaciones (horario, cambios, sin sal, etc.)"></textarea>
         <div class="zone-map-link-wrap" id="zoneMapLinkWrap">
@@ -211,7 +211,7 @@ const DATA_BASE = 'data';
 
 // Apps Script sigue usándose SOLO para escritura (pedidos) y búsqueda global
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
-const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbwZPXb3n_j9afy2Q2vtGS9jEMm23txUfonbWzFyYQ7GtWf9emqmRQLxu1nQyF_8to-Gqw/exec';
+const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbwXRLLrA636jitp_e9p51hRYR6L_-gGMj37PXxL7PSqZCAGZBKMc1ilyFPUUfSyJxNAlg/exec';
 
 /**
  * Siluetas (placeholders) – reemplazá por tus contornos si querés.
@@ -1330,7 +1330,7 @@ function readCustomerFromForm(){
 }
 
 function hasRequiredCheckoutFields(cust){
-  if(!(cust.name && cust.address && cust.dni)) return false;
+  if(!(cust.name && cust.address && cust.dni && cust.phone)) return false;
   if(hasZoneDelivery(state.place)){
     const z = $('#zoneSelect');
     if(!z || !z.value) return false;
@@ -1346,7 +1346,7 @@ async function sendOrderToSheet(){
   
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
-    return { success: false, error: 'Faltan nombre, dirección, DNI o entrega' };
+    return { success: false, error: 'Faltan nombre, dirección, DNI, teléfono o entrega' };
   }
   
   const sub = subtotal();
@@ -1450,7 +1450,7 @@ async function buildWhatsAppURL(){
 
   const cust = readCustomerFromForm();
   if(!hasRequiredCheckoutFields(cust)){
-    await appAlert('Por favor, completá nombre, dirección, DNI y entrega para continuar, necesitamos estos datos para gestionar tu pedido.');
+    await appAlert('Por favor, completá nombre, dirección, DNI, teléfono y entrega para continuar, necesitamos estos datos para gestionar tu pedido.');
     return '#';
   }
   const sub = subtotal();
@@ -1458,29 +1458,26 @@ async function buildWhatsAppURL(){
   const total = sub + ship;
   const zoneOpt = getCurrentZoneOption();
 
-  const items = state.cart
-    .map(i=>`• ${i.name} (${i.variant}) x${i.qty} — ${fmt.format(i.price*i.qty)}`)
-    .join('%0A');
-
-  const msg = [
+  // WhatsApp no soporta HTML; usa saltos de línea y *negrita*
+  const lines = [
     `Hola ${STORE.personalName}! Quiero hacer un pedido:`,
     '',
-    items,
+    ...state.cart.map(i => `• ${i.name} (${i.variant}) x${i.qty} — ${fmt.format(i.price * i.qty)}`),
     '',
     `Subtotal: ${fmt.format(sub)}`,
     `Envío: ${getShippingLine(sub)}`,
-    `TOTAL: ${fmt.format(total)}`,
+    `*TOTAL: ${fmt.format(total)}*`,
     '',
     `Nombre: ${cust.name || '-'}`,
     `DNI: ${cust.dni || '-'}`,
     `Teléfono: ${cust.phone || '-'}`,
     `Dirección: ${cust.address || '-'}`,
     `Barrio / zona: ${cust.area || '-'}`,
-    zoneOpt ? `Entrega: ${zoneOpt.label}` : '',
-    `Lugar: ${state.placeName || '-'}`,
-    cust.notes ? `Notas: ${cust.notes}` : ''
-  ].filter(Boolean).join('%0A');
+  ];
+  if(zoneOpt) lines.push(`Entrega: ${zoneOpt.label}`);
+  if(cust.notes) lines.push('', `Notas: ${cust.notes}`);
 
+  const msg = lines.join('%0A');
   return `https://wa.me/${STORE.phone}?text=${msg}`;
 }
 

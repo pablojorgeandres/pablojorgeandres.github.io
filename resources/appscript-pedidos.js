@@ -27,7 +27,7 @@ const CONTACT_SHEETS = {
   buenosaires: { tab: "DB CONTACTS BA", prefix: "B" }
 };
 
-const EMPTY_ORDER_ROW = [' ', '', '', '', '', '', '', '', '', '', '', ''];
+const EMPTY_ORDER_ROW = [' ', '', '', '', '', '', '', '', '', '', ''];
 
 /** Utils **/
 function jsonOut_(obj){
@@ -109,8 +109,8 @@ function findOrCreateClientCode_(place, customer) {
   let sheet = ss.getSheetByName(cfg.tab);
   if (!sheet) {
     sheet = ss.insertSheet(cfg.tab);
-    sheet.getRange(1, 1, 1, 6).setValues([[
-      "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"
+    sheet.getRange(1, 1, 1, 5).setValues([[
+      "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL"
     ]]);
   }
 
@@ -120,8 +120,8 @@ function findOrCreateClientCode_(place, customer) {
   let maxNum = 0;
 
   if (lastRow >= 1) {
-    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL, F=DNI
-    const values = sheet.getRange(1, 1, lastRow, 6).getValues();
+    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL (vacío por ahora)
+    const values = sheet.getRange(1, 1, lastRow, 5).getValues();
 
     for (let i = 0; i < values.length; i++) {
       const code = String(values[i][0] || "").trim();
@@ -157,24 +157,21 @@ function findOrCreateClientCode_(place, customer) {
     }
   }
 
-  // Crear nuevo
+  // Crear nuevo — CUIL (col E) queda vacío sin integración AFIP/ARCA
   const nextNum = maxNum + 1;
   const newCode = cfg.prefix + nextNum;
   const area = String(customer.area || "").trim();
   const address = String(customer.address || "").trim();
   const locality = area && address ? (area + " - " + address) : (area || address);
   const phone = String(customer.phone || "").trim();
-  const dni = String(customer.dni || "").trim();
-  let telefonoCell = phone ? ("CELU: " + phone) : "";
-  if (phone && dni) telefonoCell += " - CUIL: " + dni;
+  const telefonoCell = phone ? ("CELU: " + phone) : "";
 
   sheet.appendRow([
     newCode,
     locality,
     String(customer.name || "").trim(),
     telefonoCell,
-    dni,
-    dni
+    "" // CUIL
   ]);
 
   return newCode;
@@ -229,7 +226,6 @@ function saveOrder_(orderData) {
       'Fecha y Hora',
       'CodCliente',
       'Nombre',
-      'DNI',
       'Teléfono',
       'Dirección',
       'Zona',
@@ -249,15 +245,14 @@ function saveOrder_(orderData) {
     sheet.setColumnWidth(1, 160);  // Fecha y Hora
     sheet.setColumnWidth(2, 100);  // CodCliente
     sheet.setColumnWidth(3, 150);  // Nombre
-    sheet.setColumnWidth(4, 100);  // DNI
-    sheet.setColumnWidth(5, 120);  // Teléfono
-    sheet.setColumnWidth(6, 200);  // Dirección
-    sheet.setColumnWidth(7, 120);  // Zona
-    sheet.setColumnWidth(8, 120);  // Lugar
-    sheet.setColumnWidth(9, 200);  // Notas
-    sheet.setColumnWidth(10, 200); // Detalle Producto
-    sheet.setColumnWidth(11, 120); // Codigo Producto
-    sheet.setColumnWidth(12, 80);  // Cantidad
+    sheet.setColumnWidth(4, 120);  // Teléfono
+    sheet.setColumnWidth(5, 200);  // Dirección
+    sheet.setColumnWidth(6, 120);  // Zona
+    sheet.setColumnWidth(7, 120);  // Lugar
+    sheet.setColumnWidth(8, 200);  // Notas
+    sheet.setColumnWidth(9, 200);  // Detalle Producto
+    sheet.setColumnWidth(10, 120); // Codigo Producto
+    sheet.setColumnWidth(11, 80);  // Cantidad
   }
 
   const timestamp = formatTimestamp_(orderData.timestamp || new Date().toISOString());
@@ -277,7 +272,6 @@ function saveOrder_(orderData) {
         timestamp,                    // Fecha y Hora
         clientCode,                   // CodCliente
         customer.name || '',          // Nombre
-        customer.dni || '',           // DNI
         customer.phone || '',         // Teléfono
         customer.address || '',       // Dirección
         customer.area || '',          // Zona
@@ -289,7 +283,7 @@ function saveOrder_(orderData) {
       ];
     } else {
       row = [
-        '', '', '', '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '',
         item.name || '',
         item.code || '',
         item.qty || 0
@@ -320,7 +314,6 @@ function testSaveOrder() {
     placeName: "Santa Fe",
     customer: {
       name: "Test Usuario",
-      dni: "30123456",
       phone: "3425123456",
       address: "Calle Falsa 123",
       area: "Centro",

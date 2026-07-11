@@ -69,7 +69,7 @@ Contacts spreadsheet: `1Pyd9Bll_aa8liMzcrbaMOui15uzq8t-vM7Clu0MMRSY`
 | `santafe` | `DB CONTACTS SF` | `S` |
 | `buenosaires` | `DB CONTACTS BA` | `B` |
 
-Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL, F DNI.
+Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL (vacío; sin AFIP/ARCA).
 
 ## Frontend endpoints (`index.html`)
 
@@ -109,7 +109,7 @@ On each order:
 1. `findOrCreateClientCode_(place, customer)` — match phone (normalized digits) then name; else append next `S#`/`B#` in contacts tab.
 2. Write order rows with **CodCliente** after Fecha.
 
-Order columns: `Fecha y Hora`, `CodCliente`, `Nombre`, `DNI`, `Teléfono`, `Dirección`, `Zona`, `Lugar`, `Notas`, `Detalle Producto`, `Codigo Producto`, `Cantidad`.
+Order columns: `Fecha y Hora`, `CodCliente`, `Nombre`, `Teléfono`, `Dirección`, `Zona`, `Lugar`, `Notas`, `Detalle Producto`, `Codigo Producto`, `Cantidad` (sin DNI).
 
 **Deploy (manual):** insert column `CodCliente` after Fecha in existing order tabs → paste updated script into GAS project → ensure edit access to contacts sheet → redeploy Web App version (keep `ORDERS_URL` if updating same deployment).
 
