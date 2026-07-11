@@ -211,7 +211,7 @@ const DATA_BASE = 'data';
 
 // Apps Script sigue usándose SOLO para escritura (pedidos) y búsqueda global
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
-const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbwXRLLrA636jitp_e9p51hRYR6L_-gGMj37PXxL7PSqZCAGZBKMc1ilyFPUUfSyJxNAlg/exec';
+const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxJBdbNLepOqVNgN5yvLjPO-gdo3g0nH0SagI4FrPRSOzHzDrcuKNusXEW0BjxS7U-Qug/exec';
 
 /**
  * Siluetas (placeholders) – reemplazá por tus contornos si querés.
@@ -1454,9 +1454,7 @@ async function buildWhatsAppURL(){
     return '#';
   }
   const sub = subtotal();
-  const ship = getShippingPrice(sub);
-  const total = sub + ship;
-  const zoneOpt = getCurrentZoneOption();
+  const total = sub + getShippingPrice(sub);
 
   // WhatsApp no soporta HTML; usa saltos de línea y *negrita*
   const lines = [
@@ -1468,14 +1466,8 @@ async function buildWhatsAppURL(){
     `Envío: ${getShippingLine(sub)}`,
     `*TOTAL: ${fmt.format(total)}*`,
     '',
-    `Nombre: ${cust.name || '-'}`,
-    `DNI: ${cust.dni || '-'}`,
-    `Teléfono: ${cust.phone || '-'}`,
-    `Dirección: ${cust.address || '-'}`,
-    `Barrio / zona: ${cust.area || '-'}`,
+    'Aguardo tu respuesta, gracias!',
   ];
-  if(zoneOpt) lines.push(`Entrega: ${zoneOpt.label}`);
-  if(cust.notes) lines.push('', `Notas: ${cust.notes}`);
 
   const msg = lines.join('%0A');
   return `https://wa.me/${STORE.phone}?text=${msg}`;

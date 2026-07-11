@@ -109,8 +109,8 @@ function findOrCreateClientCode_(place, customer) {
   let sheet = ss.getSheetByName(cfg.tab);
   if (!sheet) {
     sheet = ss.insertSheet(cfg.tab);
-    sheet.getRange(1, 1, 1, 5).setValues([[
-      "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL"
+    sheet.getRange(1, 1, 1, 6).setValues([[
+      "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"
     ]]);
   }
 
@@ -120,8 +120,8 @@ function findOrCreateClientCode_(place, customer) {
   let maxNum = 0;
 
   if (lastRow >= 1) {
-    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL (vacío por ahora)
-    const values = sheet.getRange(1, 1, lastRow, 5).getValues();
+    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL, F=DNI
+    const values = sheet.getRange(1, 1, lastRow, 6).getValues();
 
     for (let i = 0; i < values.length; i++) {
       const code = String(values[i][0] || "").trim();
@@ -157,7 +157,7 @@ function findOrCreateClientCode_(place, customer) {
     }
   }
 
-  // Crear nuevo — CUIL (col E) queda vacío sin integración AFIP/ARCA
+  // Crear nuevo — CUIL (E) vacío; DNI (F) desde checkout
   const nextNum = maxNum + 1;
   const newCode = cfg.prefix + nextNum;
   const area = String(customer.area || "").trim();
@@ -165,13 +165,15 @@ function findOrCreateClientCode_(place, customer) {
   const locality = area && address ? (area + " - " + address) : (area || address);
   const phone = String(customer.phone || "").trim();
   const telefonoCell = phone ? ("CELU: " + phone) : "";
+  const dni = String(customer.dni || "").trim();
 
   sheet.appendRow([
     newCode,
     locality,
     String(customer.name || "").trim(),
     telefonoCell,
-    "" // CUIL
+    "",  // CUIL (sin AFIP/ARCA)
+    dni
   ]);
 
   return newCode;
