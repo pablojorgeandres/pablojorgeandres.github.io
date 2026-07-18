@@ -6,7 +6,12 @@ const STORE = {
   currency: 'ARS'
 };
 
-const DATA_BASE = 'data';
+/** Local: archivos del repo. Prod: GitHub (evita redeploy por cada publish del catálogo). */
+const DATA_BASE =
+  typeof location !== 'undefined' &&
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'data'
+    : 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main/data';
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbyAwbuL9afTxWp3SMjXnew0ocv-LqUyAz_4WtGuAr1Pd9ufsKwgehwcw_toMREWbrTBgA/exec';

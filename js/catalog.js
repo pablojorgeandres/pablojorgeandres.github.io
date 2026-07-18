@@ -49,7 +49,7 @@ const DEFAULT_PLACES = [
 
 async function fetchPlacesList() {
   try {
-    const res = await fetch(`${DATA_BASE}/places.json`);
+    const res = await fetch(`${DATA_BASE}/places.json`, { cache: 'no-store' });
     const data = await res.json();
     if (
       Array.isArray(data) &&
@@ -69,7 +69,7 @@ async function fetchCategoriesData(placeId) {
   const cached = getCacheWithExpiry(cacheKey);
   if (cached) return cached;
 
-  const res = await fetch(`${DATA_BASE}/${placeId}/categories.json`);
+  const res = await fetch(`${DATA_BASE}/${placeId}/categories.json`, { cache: 'no-store' });
   const fresh = await res.json();
   setCacheWithExpiry(cacheKey, fresh);
   return fresh;
@@ -82,7 +82,7 @@ async function fetchProductsData(placeId, category, categoriesData) {
 
   const meta = categoriesData && categoriesData[category];
   const slug = (meta && meta.slug) || slugifyCategory(category);
-  const res = await fetch(`${DATA_BASE}/${placeId}/products/${slug}.json`);
+  const res = await fetch(`${DATA_BASE}/${placeId}/products/${slug}.json`, { cache: 'no-store' });
   const products = await res.json();
   setCacheWithExpiry(cacheKey, products);
   return products;
