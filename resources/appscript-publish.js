@@ -38,40 +38,82 @@ function ghProps_() {
 }
 
 /**
+ * Headers comunes para la Contents API de GitHub.
+ */
+function ghHeaders_(token, withJson) {
+  var h = {
+    "Authorization": "token " + token,
+    "User-Agent": "AppsScript",
+    "Accept": "application/vnd.github+json"
+  };
+  if (withJson) h["Content-Type"] = "application/json";
+  return h;
+}
+
+/**
+ * SHA actual del archivo en la rama, o null si no existe (404).
+ * Reintenta en errores transitorios; no asume "archivo nuevo" ante fallos.
+ */
+function getFileSha_(apiUrl, gh) {
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var res = UrlFetchApp.fetch(apiUrl + "?ref=" + gh.branch, {
+      headers: ghHeaders_(gh.token, false),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200) {
+      return JSON.parse(res.getContentText()).sha || null;
+    }
+    if (code === 404) return null;
+    lastErr = "GET " + pathSafe_(apiUrl) + " → " + code + " " + res.getContentText().slice(0, 200);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "No se pudo obtener sha");
+}
+
+function pathSafe_(apiUrl) {
+  var i = apiUrl.indexOf("/contents/");
+  return i >= 0 ? apiUrl.slice(i + "/contents/".length) : apiUrl;
+}
+
+/**
  * Sube (o actualiza) un archivo en GitHub.
  * Usa la Contents API: PUT /repos/{owner}/{repo}/contents/{path}
+ * Si el PUT falla por sha faltante/desactualizado (409/422), re-fetch y reintenta.
  */
 function commitFile_(path, content, gh) {
   const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
   const encoded = Utilities.base64Encode(Utilities.newBlob(content).getBytes());
 
-  var sha = null;
-  try {
-    var existing = UrlFetchApp.fetch(apiUrl + "?ref=" + gh.branch, {
-      headers: { "Authorization": "token " + gh.token, "User-Agent": "AppsScript" },
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var sha = getFileSha_(apiUrl, gh);
+    var payload = {
+      message: "auto: update " + path,
+      content: encoded,
+      branch:  gh.branch
+    };
+    if (sha) payload.sha = sha;
+
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method:  "put",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
-    if (existing.getResponseCode() === 200) {
-      sha = JSON.parse(existing.getContentText()).sha;
-    }
-  } catch (e) { /* archivo nuevo */ }
+    var code = res.getResponseCode();
+    if (code === 200 || code === 201) return;
 
-  var payload = {
-    message: "auto: update " + path,
-    content: encoded,
-    branch:  gh.branch
-  };
-  if (sha) payload.sha = sha;
+    var body = res.getContentText();
+    lastErr = "PUT " + path + " → " + code + " " + body.slice(0, 300);
 
-  UrlFetchApp.fetch(apiUrl, {
-    method:  "put",
-    headers: {
-      "Authorization": "token " + gh.token,
-      "Content-Type":  "application/json",
-      "User-Agent":    "AppsScript"
-    },
-    payload: JSON.stringify(payload)
-  });
+    // Archivo existente sin sha, o sha viejo por carrera: reintentar con sha fresco
+    var needsShaRetry = code === 409 || code === 422;
+    if (!needsShaRetry) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "commitFile_ falló: " + path);
 }
 
 /* ---------- publicador principal ---------- */
