@@ -505,46 +505,54 @@ async function submitRemito() {
 
   const btn = $('#remitoSubmitBtn');
   btn.disabled = true;
-  btn.textContent = 'Enviando…';
+  btn.textContent = 'Guardando…';
 
-  const wa = buildRemitoWhatsAppURL({
-    clientPhone: customer.phone,
-    clientName: customer.name,
-    cart: state.remitoCart,
-    subtotal: sub,
-    shippingLine,
-    total
-  });
+  // Mantener el gesto del click: tab en blanco ahora, URL de WA después del save
+  const waTab = window.open('about:blank', '_blank');
 
-  // Abrir WA en el mismo tick del click (si no, el browser bloquea el popup tras el await)
-  if (wa && wa !== '#') {
-    window.open(wa, '_blank');
-  }
+  try {
+    const result = await postOrderToSheet(orderData);
+    if (result && result.success === false) {
+      throw new Error(result.error || 'No se pudo guardar el pedido');
+    }
 
-  // Guardar en sheet en background — no bloquear UI por el iframe de Apps Script
-  postOrderToSheet(orderData)
-    .then((result) => {
-      if (result && result.success === false) {
-        console.warn('Pedido WA abierto pero sheet falló:', result.error);
-      } else {
-        console.log('Pedido guardado en sheet');
-      }
-    })
-    .catch((err) => console.warn('Error al guardar pedido:', err));
+    const wa = buildRemitoWhatsAppURL({
+      clientPhone: customer.phone,
+      clientName: customer.name,
+      cart: state.remitoCart,
+      subtotal: sub,
+      shippingLine,
+      total
+    });
 
-  btn.disabled = false;
-  btn.textContent = 'Guardar y enviar por WhatsApp';
+    if (!wa || wa === '#') {
+      if (waTab && !waTab.closed) waTab.close();
+      throw new Error('Teléfono inválido para WhatsApp');
+    }
 
-  if (!wa || wa === '#') {
-    errEl.textContent = 'Pedido en curso, pero el teléfono no es válido para WhatsApp.';
+    if (waTab && !waTab.closed) {
+      waTab.location.href = wa;
+    } else {
+      window.open(wa, '_blank');
+    }
+
+    btn.textContent = 'Listo ✓';
+    await new Promise((r) => setTimeout(r, 500));
+
+    if (state.selectedClient && !state.remitoIsNewClient) {
+      await openClientDetail(state.selectedClient);
+    } else {
+      showView('clients');
+      await loadClients();
+    }
+  } catch (err) {
+    console.error(err);
+    if (waTab && !waTab.closed) waTab.close();
+    errEl.textContent = 'Error: ' + (err.message || err);
     setVisible(errEl, true);
-  }
-
-  if (state.selectedClient && !state.remitoIsNewClient) {
-    openClientDetail(state.selectedClient);
-  } else {
-    showView('clients');
-    loadClients();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar y enviar por WhatsApp';
   }
 }
 

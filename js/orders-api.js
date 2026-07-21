@@ -41,7 +41,7 @@ function postOrderToSheet(orderData) {
       // assume save succeeded — sheet write usually already happened.
       setTimeout(() => {
         finish({ success: true, message: 'Pedido enviado (sin confirmación)' });
-      }, 2500);
+      }, 1500);
 
       let form = document.getElementById('order-submit-form');
       if (form) form.remove();
