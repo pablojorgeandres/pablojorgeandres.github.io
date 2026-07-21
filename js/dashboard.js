@@ -505,43 +505,46 @@ async function submitRemito() {
 
   const btn = $('#remitoSubmitBtn');
   btn.disabled = true;
-  btn.textContent = 'Guardando…';
+  btn.textContent = 'Enviando…';
 
-  try {
-    const result = await postOrderToSheet(orderData);
-    if (!result.success) {
-      throw new Error(result.error || 'No se pudo guardar el pedido');
-    }
+  const wa = buildRemitoWhatsAppURL({
+    clientPhone: customer.phone,
+    clientName: customer.name,
+    cart: state.remitoCart,
+    subtotal: sub,
+    shippingLine,
+    total
+  });
 
-    const wa = buildRemitoWhatsAppURL({
-      clientPhone: customer.phone,
-      clientName: customer.name,
-      cart: state.remitoCart,
-      subtotal: sub,
-      shippingLine,
-      total
-    });
+  // Abrir WA en el mismo tick del click (si no, el browser bloquea el popup tras el await)
+  if (wa && wa !== '#') {
+    window.open(wa, '_blank');
+  }
 
-    if (wa === '#') {
-      await appAlert('Pedido guardado, pero el teléfono no es válido para WhatsApp.');
-    } else {
-      window.open(wa, '_blank');
-      await appAlert('Pedido guardado. Se abrió WhatsApp con el mensaje para el cliente.');
-    }
+  // Guardar en sheet en background — no bloquear UI por el iframe de Apps Script
+  postOrderToSheet(orderData)
+    .then((result) => {
+      if (result && result.success === false) {
+        console.warn('Pedido WA abierto pero sheet falló:', result.error);
+      } else {
+        console.log('Pedido guardado en sheet');
+      }
+    })
+    .catch((err) => console.warn('Error al guardar pedido:', err));
 
-    if (state.selectedClient && !state.remitoIsNewClient) {
-      await openClientDetail(state.selectedClient);
-    } else {
-      showView('clients');
-      await loadClients();
-    }
-  } catch (err) {
-    console.error(err);
-    errEl.textContent = 'Error: ' + (err.message || err);
+  btn.disabled = false;
+  btn.textContent = 'Guardar y enviar por WhatsApp';
+
+  if (!wa || wa === '#') {
+    errEl.textContent = 'Pedido en curso, pero el teléfono no es válido para WhatsApp.';
     setVisible(errEl, true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Guardar y enviar por WhatsApp';
+  }
+
+  if (state.selectedClient && !state.remitoIsNewClient) {
+    openClientDetail(state.selectedClient);
+  } else {
+    showView('clients');
+    loadClients();
   }
 }
 
