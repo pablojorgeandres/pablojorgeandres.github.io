@@ -504,40 +504,35 @@ async function submitRemito() {
   };
 
   const btn = $('#remitoSubmitBtn');
+  const wa = buildRemitoWhatsAppURL({
+    clientPhone: customer.phone,
+    clientName: customer.name,
+    cart: state.remitoCart,
+    subtotal: sub,
+    shippingLine,
+    total
+  });
+
+  if (!wa || wa === '#') {
+    errEl.textContent = 'Teléfono inválido para WhatsApp.';
+    setVisible(errEl, true);
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Guardando…';
 
-  // Mantener el gesto del click: tab en blanco ahora, URL de WA después del save
-  const waTab = window.open('about:blank', '_blank');
+  // Abrir WA en el mismo click (URL real). El about:blank nunca navegaba porque
+  // el await a Google se colgaba / el browser bloqueaba el location posterior.
+  window.open(wa, '_blank');
 
   try {
-    const result = await postOrderToSheet(orderData);
-    if (result && result.success === false) {
-      throw new Error(result.error || 'No se pudo guardar el pedido');
-    }
+    postOrderToSheet(orderData).catch((err) => console.warn('Sheet save error:', err));
 
-    const wa = buildRemitoWhatsAppURL({
-      clientPhone: customer.phone,
-      clientName: customer.name,
-      cart: state.remitoCart,
-      subtotal: sub,
-      shippingLine,
-      total
-    });
-
-    if (!wa || wa === '#') {
-      if (waTab && !waTab.closed) waTab.close();
-      throw new Error('Teléfono inválido para WhatsApp');
-    }
-
-    if (waTab && !waTab.closed) {
-      waTab.location.href = wa;
-    } else {
-      window.open(wa, '_blank');
-    }
-
+    // Solo UX: el sheet ya está en camino; no esperamos confirmación de Apps Script
+    await new Promise((r) => setTimeout(r, 900));
     btn.textContent = 'Listo ✓';
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 400));
 
     if (state.selectedClient && !state.remitoIsNewClient) {
       await openClientDetail(state.selectedClient);
@@ -547,7 +542,6 @@ async function submitRemito() {
     }
   } catch (err) {
     console.error(err);
-    if (waTab && !waTab.closed) waTab.close();
     errEl.textContent = 'Error: ' + (err.message || err);
     setVisible(errEl, true);
   } finally {

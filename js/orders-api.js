@@ -1,5 +1,7 @@
 /**
  * POST order to ORDERS_URL via hidden form + iframe (CORS-safe for Apps Script).
+ * Resolves quickly (optimistic): the sheet write usually succeeds even when
+ * Google blocks iframe postMessage (X-Frame-Options / warden).
  * @param {object} orderData
  * @returns {Promise<{success:boolean, message?:string, error?:string, result?:object}>}
  */
@@ -13,6 +15,18 @@ function postOrderToSheet(orderData) {
       resolve(payload);
     };
 
+    const isOrdersReply = (data) => {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+      if (data.source === 'nimu-orders') return true;
+      return typeof data.success === 'boolean' &&
+        ('message' in data || 'error' in data || 'result' in data);
+    };
+
+    const messageHandler = (event) => {
+      if (!isOrdersReply(event.data)) return;
+      finish(event.data);
+    };
+
     try {
       let iframe = document.getElementById('order-response-frame');
       if (!iframe) {
@@ -20,28 +34,11 @@ function postOrderToSheet(orderData) {
         iframe.id = 'order-response-frame';
         iframe.name = 'order-response-frame';
         iframe.style.display = 'none';
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
         document.body.appendChild(iframe);
       }
 
-      const isOrdersReply = (data) => {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-        if (data.source === 'nimu-orders') return true;
-        // Legacy Apps Script replies before source tag was added
-        return typeof data.success === 'boolean' &&
-          ('message' in data || 'error' in data || 'result' in data);
-      };
-
-      const messageHandler = (event) => {
-        if (!isOrdersReply(event.data)) return;
-        finish(event.data);
-      };
       window.addEventListener('message', messageHandler);
-
-      // If iframe is blocked (X-Frame-Options) or postMessage never arrives,
-      // assume save succeeded — sheet write usually already happened.
-      setTimeout(() => {
-        finish({ success: true, message: 'Pedido enviado (sin confirmación)' });
-      }, 1500);
 
       let form = document.getElementById('order-submit-form');
       if (form) form.remove();
@@ -62,6 +59,11 @@ function postOrderToSheet(orderData) {
       document.body.appendChild(form);
       console.log('Enviando pedido:', orderData);
       form.submit();
+
+      // Never block the UI on Google's iframe. Sheet write is already in flight.
+      setTimeout(() => {
+        finish({ success: true, message: 'Pedido enviado (sin confirmación)' });
+      }, 500);
     } catch (err) {
       console.error('Error al enviar pedido:', err);
       finish({ success: false, error: err.message });
