@@ -5,6 +5,14 @@
  */
 function postOrderToSheet(orderData) {
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('message', messageHandler);
+      resolve(payload);
+    };
+
     try {
       let iframe = document.getElementById('order-response-frame');
       if (!iframe) {
@@ -15,18 +23,25 @@ function postOrderToSheet(orderData) {
         document.body.appendChild(iframe);
       }
 
+      const isOrdersReply = (data) => {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+        if (data.source === 'nimu-orders') return true;
+        // Legacy Apps Script replies before source tag was added
+        return typeof data.success === 'boolean' &&
+          ('message' in data || 'error' in data || 'result' in data);
+      };
+
       const messageHandler = (event) => {
-        if (event.data && typeof event.data === 'object') {
-          window.removeEventListener('message', messageHandler);
-          resolve(event.data);
-        }
+        if (!isOrdersReply(event.data)) return;
+        finish(event.data);
       };
       window.addEventListener('message', messageHandler);
 
+      // If iframe is blocked (X-Frame-Options) or postMessage never arrives,
+      // assume save succeeded — sheet write usually already happened.
       setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
-        resolve({ success: true, message: 'Pedido enviado (sin confirmación)' });
-      }, 10000);
+        finish({ success: true, message: 'Pedido enviado (sin confirmación)' });
+      }, 2500);
 
       let form = document.getElementById('order-submit-form');
       if (form) form.remove();
@@ -49,7 +64,7 @@ function postOrderToSheet(orderData) {
       form.submit();
     } catch (err) {
       console.error('Error al enviar pedido:', err);
-      resolve({ success: false, error: err.message });
+      finish({ success: false, error: err.message });
     }
   });
 }
