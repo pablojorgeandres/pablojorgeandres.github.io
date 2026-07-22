@@ -68,16 +68,34 @@ function buildRemitoWhatsAppURL({
   if (!cart || !cart.length) return '#';
 
   const greetingName = (clientName || '').trim() || 'hola';
+  const itemLines = cart.map((item) => {
+    const variant = item.variant ? ` (${item.variant})` : '';
+    const lineTotal = (item.price || 0) * (item.qty || 0);
+    return `•  ${item.name}${variant} x${item.qty} — ${fmt.format(lineTotal)}`;
+  });
+
   const lines = [
-    `Hola ${greetingName}! Te confirmo tu pedido de Nimú:`,
+    `Hola ${greetingName}! Te envio el detalle del pedido de Nimu:`,
     '',
-    ...cart.map(formatOrderItemLine),
+    ...itemLines,
     '',
     `Subtotal: ${fmt.format(subtotal)}`,
     `Envío: ${shippingLine}`,
-    `*TOTAL: ${fmt.format(total)}*`,
+    `TOTAL: ${fmt.format(total)}`,
     '',
-    'Cualquier duda, escribinos. ¡Gracias!'
+    '',
+    'Datos para realizar la transferencia',
+    '',
+    'Alias: somosnimu',
+    'Cuenta: Mercado pago',
+    'Titular: Antonella Josefina Andreassi',
+    '',
+    'Una vez realizada la transferencia no te olvides de enviarnos el comprobante 🙂',
+    '',
+    '-si surge alguna diferencia en el total por falta de stock y el pago ya se realizo, la difencia  a tu favor se abonara mediante transferencia dentro de las 72hs posteriores a la entreg del pedido-',
+    '',
+    '',
+    'Grazie 🥰'
   ];
 
   return buildWaMeURL(clientPhone, lines);
