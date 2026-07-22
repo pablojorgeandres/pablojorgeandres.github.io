@@ -90,12 +90,12 @@ function buildRemitoWhatsAppURL({
     'Cuenta: Mercado pago',
     'Titular: Antonella Josefina Andreassi',
     '',
-    'Una vez realizada la transferencia no te olvides de enviarnos el comprobante 🙂',
+    'Una vez realizada la transferencia no te olvides de enviarnos el comprobante \u{1F642}',
     '',
     '-si surge alguna diferencia en el total por falta de stock y el pago ya se realizo, la difencia  a tu favor se abonara mediante transferencia dentro de las 72hs posteriores a la entreg del pedido-',
     '',
     '',
-    'Grazie 🥰'
+    'Grazie \u{1F970}'
   ];
 
   return buildWaMeURL(clientPhone, lines);
