@@ -4,7 +4,7 @@
  * Publicador de catálogo estático.
  * Lee cada Spreadsheet de PLACES, genera los JSON y los sube al repo de
  * GitHub vía su API.  Está pensado para correr como trigger time-driven
- * (cada 10-15 min) dentro del mismo proyecto de Apps Script que ya tiene
+ * (cada 1 h) dentro del mismo proyecto de Apps Script que ya tiene
  * el catálogo (appscript.js), reutilizando PLACES, readCategoriesOnly_,
  * readSheetFast_, IGNORED_PREFIX, etc.
  *
@@ -15,7 +15,7 @@
  *      - GITHUB_TOKEN  = <el token>
  *      - GITHUB_REPO   = owner/repo  (ej: "pablojorgeandres/tienda-nimu")
  *      - GITHUB_BRANCH = main        (o la rama que use Pages)
- *   3. Agregar trigger: publishCatalog → Basado en tiempo → Cada 15 min.
+ *   3. Agregar trigger: publishCatalog → Basado en tiempo → Cada hora.
  */
 
 /* ---------- helpers ---------- */

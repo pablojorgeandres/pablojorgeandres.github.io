@@ -16,7 +16,7 @@ Needs HTTP server locally (`python3 -m http.server 8000`).
 ## Pipeline
 
 ```
-Sheets → publishCatalog() ~15min → GitHub data/*.json → fetch() → UI (+ localStorage 24h)
+Sheets → publishCatalog() ~1h → GitHub data/*.json → fetch() → UI (+ localStorage 24h)
 Sheets → doGet search → APPS_SCRIPT_URL (CacheService 5min)
 Cart → WhatsApp + form POST ORDERS_URL
        → findOrCreateClientCode_ (contacts SF/BA) → orders sheet (+ CodCliente)
