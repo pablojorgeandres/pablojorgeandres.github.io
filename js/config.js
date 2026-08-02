@@ -14,7 +14,7 @@ const DATA_BASE =
     : 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main/data';
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
-const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbyAwbuL9afTxWp3SMjXnew0ocv-LqUyAz_4WtGuAr1Pd9ufsKwgehwcw_toMREWbrTBgA/exec';
+const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxMNPTt_eiSoS9LIf-gbukhev0lMFdCmNGkJlWoBL0bhkwYlwpm76Df9hRM8DRQF932aw/exec';
 
 /** Zonas de entrega por lugar (pickup + Z1–Z3). */
 const PLACE_ZONE_CONFIG = {

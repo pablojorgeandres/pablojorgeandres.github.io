@@ -239,8 +239,9 @@ function findOrCreateClientCode_(place, customer) {
   const dni = readCustomerDni_(customer);
 
   const newRow = Math.max(sheet.getLastRow(), 1) + 1;
-  // setValues (no appendRow) para garantizar col F = DNI
-  sheet.getRange(newRow, 1, newRow, 6).setValues([[
+  // getRange(row, column, numRows, numColumns) — NO es fila/col final.
+  // getRange(newRow, 1, newRow, 6) pedía newRow filas y rompía altas nuevas.
+  sheet.getRange(newRow, 1, 1, 6).setValues([[
     newCode,
     locality,
     String(customer.name || "").trim(),
