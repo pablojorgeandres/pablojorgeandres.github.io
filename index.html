@@ -6,10 +6,26 @@
   <title>Nimú - Consumo con sentido</title>
   <meta name="description" content="Catálogo simple con carrito y pedido por WhatsApp. HTML, CSS y JS puros." />
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
   <header>
+    <div id="topTicker" class="top-ticker is-place-hidden" role="presentation" hidden>
+      <div class="top-ticker-track">
+        <div class="top-ticker-group">
+          <span>🌰 Pedido mínimo $40.000</span>
+          <span>🚚 Envío GRATIS en Vicente López</span>
+          <span>🌿 Hacé tu compra este finde y recibila el próximo viernes</span>
+          <span>Todo lo que necesitás para alimentarte de forma saludable, en un solo lugar.</span>
+        </div>
+        <div class="top-ticker-group" aria-hidden="true">
+          <span>🌰 Pedido mínimo $40.000</span>
+          <span>🚚 Envío GRATIS en Vicente López</span>
+          <span>🌿 Hacé tu compra este finde y recibila el próximo viernes</span>
+          <span>Todo lo que necesitás para alimentarte de forma saludable, en un solo lugar.</span>
+        </div>
+      </div>
+    </div>
     <div class="container">
       <div class="row">
         <div class="brand"><i><img src="imgs/nimuicon.jpg" alt="Nimú" class="brand-icon"></i> <span id="storeName">Nimú - Consumo con sentido</span></div>
@@ -497,6 +513,7 @@ function renderPlaces(){
       state.category = null;
       state.search = '';
       showView('home');
+      updateTopTickerVisibility();
       await fetchCategoriesForPlace(state.place);
       renderCategories();
       renderCart();
@@ -797,6 +814,7 @@ function scrollAppToTop(){
   const home = $('#homeCats');
   if(list) list.scrollTop = 0;
   if(home) home.scrollTop = 0;
+  updateTopTickerVisibility();
 }
 
 function showView(v){
@@ -804,6 +822,7 @@ function showView(v){
   $('#placeSelect').style.display = (v==='places') ? '' : 'none';
   $('#homeCats').style.display  = (v==='home') ? '' : 'none';
   $('#productList').style.display = (v==='products') ? '' : 'none';
+  updateTopTickerVisibility();
   
   // Limpiar búsqueda al cambiar de vista
   $('#searchInput').value = '';
@@ -1259,12 +1278,43 @@ async function buildWhatsAppURL(){
   });
 }
 
+/************ Top ticker (telebús) — solo Buenos Aires ************/
+function updateTopTickerVisibility(){
+  const ticker = $('#topTicker');
+  if(!ticker) return;
+
+  const forPlace = state.place === 'buenosaires' && state.view !== 'places';
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  const collapse = forPlace && y > 12;
+
+  const wasPlaceHidden = ticker.classList.contains('is-place-hidden');
+  const wasCollapsed = ticker.classList.contains('is-collapsed');
+  const placeHidden = !forPlace;
+
+  ticker.hidden = placeHidden;
+  ticker.classList.toggle('is-place-hidden', placeHidden);
+  ticker.classList.toggle('is-collapsed', collapse);
+
+  if(placeHidden !== wasPlaceHidden || collapse !== wasCollapsed){
+    requestAnimationFrame(()=> refreshSiteHeaderHeightVar());
+  }
+}
+
+function scheduleTopTickerVisibility(){
+  if(scheduleTopTickerVisibility._raf != null) return;
+  scheduleTopTickerVisibility._raf = requestAnimationFrame(()=>{
+    scheduleTopTickerVisibility._raf = null;
+    updateTopTickerVisibility();
+  });
+}
+
 /************ INIT ************/
 async function init(){
   // Nombre base
   $('#storeName').textContent = STORE.name;
 
   refreshSiteHeaderHeightVar();
+  updateTopTickerVisibility();
   window.addEventListener('resize', refreshSiteHeaderHeightVar);
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', refreshSiteHeaderHeightVar);
@@ -1277,6 +1327,7 @@ async function init(){
   }
 
   window.addEventListener('scroll', scheduleBackToCatsDock, {passive:true});
+  window.addEventListener('scroll', scheduleTopTickerVisibility, {passive:true});
   window.addEventListener('resize', scheduleBackToCatsDock);
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', scheduleBackToCatsDock);

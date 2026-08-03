@@ -39,6 +39,49 @@ header{
   border-bottom: 1px solid rgba(0,0,0,.08);
 }
 
+/* Top ticker / telebús */
+.top-ticker{
+  --ticker-h: 34px;
+  background:#111;
+  color:#fff;
+  overflow:hidden;
+  height:var(--ticker-h);
+  line-height:var(--ticker-h);
+  transition:height .28s ease, opacity .2s ease;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.top-ticker.is-collapsed,
+.top-ticker.is-place-hidden{
+  height:0;
+  opacity:0;
+  border-bottom-width:0;
+  pointer-events:none;
+}
+.top-ticker-track{
+  display:flex;
+  width:max-content;
+  gap:10rem;
+  animation:nim-ticker 55s linear infinite;
+  will-change:transform;
+}
+.top-ticker-group{
+  display:flex;
+  align-items:center;
+  gap:10rem;
+  padding:0;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.03em;
+}
+@keyframes nim-ticker{
+  from{ transform:translateX(0); }
+  to{ transform:translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce){
+  .top-ticker-track{ animation:none; }
+}
+
 /* Contenido de cabecera que se pega al header */
 .header-content{
   position: sticky;
