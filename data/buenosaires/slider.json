@@ -1,12 +1,3 @@
 {
-  "slides": [
-    {
-      "i": 1,
-      "src": "imgs/slider/buenosaires/1.jpg",
-      "v": 1785716502,
-      "link": {
-        "type": "none"
-      }
-    }
-  ]
+  "slides": []
 }
