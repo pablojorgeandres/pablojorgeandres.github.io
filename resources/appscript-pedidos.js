@@ -1,5 +1,5 @@
 /**
- * Apps Script para Guardar Pedidos (+ lectura clients/orders para dashboard)
+ * Apps Script para Guardar Pedidos (+ lectura clients/orders + editor de slider)
  * Este script debe ser copiado en el editor de Apps Script del spreadsheet de pedidos
  * URL del spreadsheet: https://docs.google.com/spreadsheets/d/1-926t3YP4ZEf1xWyGA-IlsDm3JmxNn5eJRd-JayRafs/edit
  *
@@ -11,9 +11,20 @@
  * doGet:
  *  ?action=clients&place=santafe|buenosaires
  *  ?action=orders&place=…&clientCode=S123  (clientCode opcional; q opcional)
+ *  ?action=slider&place=santafe|buenosaires
+ *
+ * doPost form fields:
+ *  orderData — pedidos (como siempre)
+ *  sliderData — editor de slider (GitHub Contents API)
+ *
+ * Script Properties (slider):
+ *  GITHUB_TOKEN  — fine-grained PAT con Contents R/W
+ *  GITHUB_REPO   — owner/repo (default pablojorgeandres/tienda-nimu)
+ *  GITHUB_BRANCH — main
  *
  * Deploy: pegar este archivo en el proyecto GAS de pedidos, asegurar acceso de
- * edición al sheet de contactos, y publicar una nueva versión del Web App.
+ * edición al sheet de contactos, setear GITHUB_* si usás slider, y publicar
+ * una nueva versión del Web App.
  */
 
 /** CONFIG **/
@@ -56,6 +67,276 @@ function htmlOut_(message){
   `;
   return HtmlService.createHtmlOutput(html)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function htmlOutSlider_(message){
+  const payload = Object.assign({ source: 'nimu-slider' }, message || {});
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body>
+      <script>
+        window.parent.postMessage(${JSON.stringify(payload)}, '*');
+      </script>
+    </body>
+    </html>
+  `;
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/* ---------- GitHub helpers (slider) ---------- */
+
+function ghProps_() {
+  const ps = PropertiesService.getScriptProperties();
+  return {
+    token:  ps.getProperty("GITHUB_TOKEN"),
+    repo:   ps.getProperty("GITHUB_REPO")   || "pablojorgeandres/tienda-nimu",
+    branch: ps.getProperty("GITHUB_BRANCH") || "main"
+  };
+}
+
+function ghHeaders_(token, withJson) {
+  var h = {
+    "Authorization": "token " + token,
+    "User-Agent": "AppsScript",
+    "Accept": "application/vnd.github+json"
+  };
+  if (withJson) h["Content-Type"] = "application/json";
+  return h;
+}
+
+function pathSafe_(apiUrl) {
+  var i = apiUrl.indexOf("/contents/");
+  return i >= 0 ? apiUrl.slice(i + "/contents/".length) : apiUrl;
+}
+
+function getFileSha_(apiUrl, gh) {
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var res = UrlFetchApp.fetch(apiUrl + "?ref=" + gh.branch, {
+      headers: ghHeaders_(gh.token, false),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200) {
+      return JSON.parse(res.getContentText()).sha || null;
+    }
+    if (code === 404) return null;
+    lastErr = "GET " + pathSafe_(apiUrl) + " → " + code + " " + res.getContentText().slice(0, 200);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "No se pudo obtener sha");
+}
+
+function commitFile_(path, content, gh) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  const encoded = Utilities.base64Encode(Utilities.newBlob(content).getBytes());
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var sha = getFileSha_(apiUrl, gh);
+    var payload = {
+      message: "auto: update " + path,
+      content: encoded,
+      branch:  gh.branch
+    };
+    if (sha) payload.sha = sha;
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method:  "put",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200 || code === 201) return;
+    var body = res.getContentText();
+    lastErr = "PUT " + path + " → " + code + " " + body.slice(0, 300);
+    if (code !== 409 && code !== 422) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "commitFile_ falló: " + path);
+}
+
+function commitBase64File_(path, contentBase64, gh, message) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var sha = getFileSha_(apiUrl, gh);
+    var payload = {
+      message: message || ("auto: update " + path),
+      content: String(contentBase64 || "").replace(/\s/g, ""),
+      branch: gh.branch
+    };
+    if (sha) payload.sha = sha;
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method: "put",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200 || code === 201) return;
+    var body = res.getContentText();
+    lastErr = "PUT " + path + " → " + code + " " + body.slice(0, 300);
+    if (code !== 409 && code !== 422) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "commitBase64File_ falló: " + path);
+}
+
+function deleteFile_(path, gh, message) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var sha = getFileSha_(apiUrl, gh);
+  if (!sha) return false;
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    sha = getFileSha_(apiUrl, gh);
+    if (!sha) return false;
+    var payload = {
+      message: message || ("auto: delete " + path),
+      sha: sha,
+      branch: gh.branch
+    };
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method: "delete",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200 || code === 204) return true;
+    lastErr = "DELETE " + path + " → " + code + " " + res.getContentText().slice(0, 300);
+    if (code !== 409 && code !== 422) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "deleteFile_ falló: " + path);
+}
+
+function readGithubTextFile_(path, gh) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var res = UrlFetchApp.fetch(apiUrl + "?ref=" + gh.branch, {
+    headers: ghHeaders_(gh.token, false),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code === 404) return null;
+  if (code !== 200) {
+    throw new Error("GET " + path + " → " + code + " " + res.getContentText().slice(0, 200));
+  }
+  var data = JSON.parse(res.getContentText());
+  var raw = String(data.content || "").replace(/\n/g, "");
+  return Utilities.newBlob(Utilities.base64Decode(raw)).getDataAsString("UTF-8");
+}
+
+/* ---------- Slider manifesto ---------- */
+
+const SLIDER_MAX_SLIDES = 7;
+
+function sliderManifestPath_(placeId) {
+  return "data/" + placeId + "/slider.json";
+}
+
+function sliderImagePath_(placeId, index) {
+  return "imgs/slider/" + placeId + "/" + index + ".jpg";
+}
+
+function normalizeSliderLink_(link) {
+  const raw = link && typeof link === "object" ? link : {};
+  const type = String(raw.type || "none").toLowerCase().trim();
+  if (type === "category") {
+    const category = String(raw.category || "").trim();
+    if (!category) return { type: "none" };
+    return { type: "category", category: category };
+  }
+  if (type === "external") {
+    const url = String(raw.url || "").trim();
+    if (!/^https?:\/\//i.test(url)) return { type: "none" };
+    return { type: "external", url: url };
+  }
+  return { type: "none" };
+}
+
+function isValidSliderPlace_(placeId) {
+  return Object.prototype.hasOwnProperty.call(PLACE_SHEETS, placeId);
+}
+
+function readSliderManifest_(placeId) {
+  const gh = ghProps_();
+  if (!gh.token) throw new Error("Falta GITHUB_TOKEN en Script Properties del proyecto de pedidos");
+  const text = readGithubTextFile_(sliderManifestPath_(placeId), gh);
+  if (!text) return { slides: [] };
+  try {
+    const data = JSON.parse(text);
+    const slides = Array.isArray(data && data.slides) ? data.slides : [];
+    return { slides: slides };
+  } catch (err) {
+    return { slides: [] };
+  }
+}
+
+function writeSliderManifest_(placeId, manifest, gh) {
+  const slides = (manifest.slides || []).slice()
+    .filter(function(s) { return s && s.i >= 1 && s.i <= SLIDER_MAX_SLIDES; })
+    .sort(function(a, b) { return a.i - b.i; });
+  const body = JSON.stringify({ slides: slides }, null, 2);
+  commitFile_(sliderManifestPath_(placeId), body, gh);
+  return { slides: slides };
+}
+
+function handleSliderMutation_(payload) {
+  const placeId = String(payload.place || "").toLowerCase().trim();
+  if (!isValidSliderPlace_(placeId)) {
+    throw new Error("Lugar inválido: " + placeId);
+  }
+  const op = String(payload.op || "").toLowerCase().trim();
+  const index = parseInt(payload.i, 10);
+  if (!(index >= 1 && index <= SLIDER_MAX_SLIDES)) {
+    throw new Error("Índice de slide inválido (1–" + SLIDER_MAX_SLIDES + ")");
+  }
+
+  const gh = ghProps_();
+  if (!gh.token) throw new Error("Falta GITHUB_TOKEN en Script Properties del proyecto de pedidos");
+
+  const manifest = readSliderManifest_(placeId);
+  let slides = (manifest.slides || []).slice();
+  const existingIdx = slides.findIndex(function(s) { return Number(s.i) === index; });
+  const link = normalizeSliderLink_(payload.link);
+  const now = Math.floor(Date.now() / 1000);
+  const imgPath = sliderImagePath_(placeId, index);
+
+  if (op === "upsert") {
+    const imageBase64 = String(payload.imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "").replace(/\s/g, "");
+    if (!imageBase64) throw new Error("Falta imageBase64 para upsert");
+    commitBase64File_(imgPath, imageBase64, gh, "slider: upsert " + placeId + "/" + index);
+    const slide = {
+      i: index,
+      src: imgPath,
+      v: now,
+      link: link
+    };
+    if (existingIdx >= 0) slides[existingIdx] = slide;
+    else slides.push(slide);
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Slide actualizado", place: placeId, slides: saved.slides };
+  }
+
+  if (op === "meta") {
+    if (existingIdx < 0) throw new Error("No hay imagen en el slot " + index);
+    slides[existingIdx].link = link;
+    slides[existingIdx].v = now;
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Link actualizado", place: placeId, slides: saved.slides };
+  }
+
+  if (op === "remove") {
+    deleteFile_(imgPath, gh, "slider: remove " + placeId + "/" + index);
+    slides = slides.filter(function(s) { return Number(s.i) !== index; });
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Slide eliminado", place: placeId, slides: saved.slides };
+  }
+
+  throw new Error("op inválida (upsert|meta|remove)");
 }
 
 /**
@@ -502,7 +783,7 @@ function listOrders_(place, clientCode, q) {
 }
 
 /**
- * Lectura para dashboard: clients | orders
+ * Lectura para dashboard: clients | orders | slider
  */
 function doGet(e) {
   try {
@@ -520,12 +801,26 @@ function doGet(e) {
       return jsonOut_(listOrders_(place, p.clientCode, p.q));
     }
 
+    if (action === "slider") {
+      if (!place) return jsonOut_({ error: "Falta place" });
+      if (!isValidSliderPlace_(place)) return jsonOut_({ error: "Lugar inválido", slides: [] });
+      try {
+        return jsonOut_(readSliderManifest_(place));
+      } catch (sliderErr) {
+        return jsonOut_({
+          error: String(sliderErr && sliderErr.message || sliderErr),
+          slides: []
+        });
+      }
+    }
+
     return jsonOut_({
       error: "Acción inválida",
-      validActions: ["clients", "orders"],
+      validActions: ["clients", "orders", "slider"],
       examples: [
         "?action=clients&place=santafe",
-        "?action=orders&place=santafe&clientCode=S1"
+        "?action=orders&place=santafe&clientCode=S1",
+        "?action=slider&place=santafe"
       ]
     });
   } catch (err) {
@@ -535,11 +830,27 @@ function doGet(e) {
 }
 
 /**
- * Handler para guardar pedidos (POST desde formulario)
+ * Handler POST: pedidos (orderData) o slider (sliderData)
  */
 function doPost(e){
   try {
-    const orderDataStr = e.parameter.orderData || e.postData?.contents;
+    const params = (e && e.parameter) || {};
+
+    if (params.sliderData) {
+      try {
+        const sliderPayload = JSON.parse(params.sliderData);
+        const result = handleSliderMutation_(sliderPayload);
+        return htmlOutSlider_(result);
+      } catch (sliderErr) {
+        console.error("Error slider doPost:", sliderErr);
+        return htmlOutSlider_({
+          success: false,
+          error: String(sliderErr && sliderErr.message || sliderErr)
+        });
+      }
+    }
+
+    const orderDataStr = params.orderData || (e.postData && e.postData.contents);
 
     if (!orderDataStr) {
       return htmlOut_({ success: false, error: 'No hay datos en el POST' });

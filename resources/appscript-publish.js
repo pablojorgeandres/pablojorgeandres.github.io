@@ -116,6 +116,91 @@ function commitFile_(path, content, gh) {
   throw new Error(lastErr || "commitFile_ falló: " + path);
 }
 
+/**
+ * Sube (o actualiza) un archivo binario ya codificado en base64.
+ * contentBase64 debe ser el payload listo para la Contents API (sin data-URL prefix).
+ */
+function commitBase64File_(path, contentBase64, gh, message) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    var sha = getFileSha_(apiUrl, gh);
+    var payload = {
+      message: message || ("auto: update " + path),
+      content: String(contentBase64 || "").replace(/\s/g, ""),
+      branch: gh.branch
+    };
+    if (sha) payload.sha = sha;
+
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method: "put",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200 || code === 201) return;
+
+    var body = res.getContentText();
+    lastErr = "PUT " + path + " → " + code + " " + body.slice(0, 300);
+    var needsShaRetry = code === 409 || code === 422;
+    if (!needsShaRetry) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "commitBase64File_ falló: " + path);
+}
+
+/**
+ * Borra un archivo del repo. No-op si no existe (404).
+ */
+function deleteFile_(path, gh, message) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var sha = getFileSha_(apiUrl, gh);
+  if (!sha) return false;
+
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    sha = getFileSha_(apiUrl, gh);
+    if (!sha) return false;
+    var payload = {
+      message: message || ("auto: delete " + path),
+      sha: sha,
+      branch: gh.branch
+    };
+    var res = UrlFetchApp.fetch(apiUrl, {
+      method: "delete",
+      headers: ghHeaders_(gh.token, true),
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200 || code === 204) return true;
+    lastErr = "DELETE " + path + " → " + code + " " + res.getContentText().slice(0, 300);
+    if (code !== 409 && code !== 422) throw new Error(lastErr);
+    Utilities.sleep(500 * attempt);
+  }
+  throw new Error(lastErr || "deleteFile_ falló: " + path);
+}
+
+/**
+ * Lee el contenido texto de un path en GitHub, o null si no existe.
+ */
+function readGithubTextFile_(path, gh) {
+  const apiUrl = "https://api.github.com/repos/" + gh.repo + "/contents/" + path;
+  var res = UrlFetchApp.fetch(apiUrl + "?ref=" + gh.branch, {
+    headers: ghHeaders_(gh.token, false),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code === 404) return null;
+  if (code !== 200) {
+    throw new Error("GET " + path + " → " + code + " " + res.getContentText().slice(0, 200));
+  }
+  var data = JSON.parse(res.getContentText());
+  var raw = String(data.content || "").replace(/\n/g, "");
+  return Utilities.newBlob(Utilities.base64Decode(raw)).getDataAsString("UTF-8");
+}
+
 /* ---------- publicador principal ---------- */
 
 function publishCatalog() {

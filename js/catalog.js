@@ -75,6 +75,64 @@ async function fetchCategoriesData(placeId) {
   return fresh;
 }
 
+/**
+ * Slider manifesto for a place.
+ * Prefers ORDERS_URL (GitHub Contents API, fresh) because raw.githubusercontent.com
+ * caches ~5 min and lags behind dashboard uploads/deletes.
+ * @param {string} placeId
+ * @param {{bypassCache?: boolean}} [opts]
+ */
+async function fetchSliderData(placeId, opts) {
+  try {
+    return await fetchSliderDataFromApi(placeId);
+  } catch (apiErr) {
+    console.warn('Slider API no disponible, fallback raw:', apiErr);
+  }
+
+  const base =
+    typeof REPO_RAW_BASE !== 'undefined'
+      ? REPO_RAW_BASE + '/data'
+      : 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main/data';
+  try {
+    const url = `${base}/${placeId}/slider.json?t=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return { slides: [] };
+    const data = await res.json();
+    const slides = Array.isArray(data && data.slides) ? data.slides : [];
+    return { slides };
+  } catch (e) {
+    console.warn('Slider no disponible:', e);
+    return { slides: [] };
+  }
+}
+
+/**
+ * Fresh slider manifesto via pedidos Apps Script (GitHub).
+ */
+async function fetchSliderDataFromApi(placeId) {
+  const url = `${ORDERS_URL}?action=slider&place=${encodeURIComponent(placeId)}&t=${Date.now()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+
+  if (data && data.error) {
+    const actions = data.validActions;
+    if (Array.isArray(actions) && !actions.includes('slider')) {
+      const err = new Error(
+        'El Web App de pedidos no tiene el endpoint slider. Pegá resources/appscript-pedidos.js y redeployá ORDERS_URL.'
+      );
+      err.code = 'slider_not_deployed';
+      throw err;
+    }
+    // Cualquier error de backend (token, permisos UrlFetch, repo, etc.)
+    const err = new Error(data.error);
+    err.code = 'slider_api';
+    throw err;
+  }
+
+  return { slides: Array.isArray(data && data.slides) ? data.slides : [] };
+}
+
 async function fetchProductsData(placeId, category, categoriesData) {
   const cacheKey = `products_v2__${placeId}__${category}`;
   const cached = getCacheWithExpiry(cacheKey);

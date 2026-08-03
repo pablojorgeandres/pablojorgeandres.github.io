@@ -13,6 +13,29 @@ const DATA_BASE =
     ? 'data'
     : 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main/data';
 
+const REPO_RAW_BASE = 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main';
+
+/**
+ * Resolve a repo-relative asset path. Slider images are always read from GitHub raw
+ * because dashboard uploads land on the remote before a local clone has them.
+ */
+function resolveRepoAssetUrl(path) {
+  const p = String(path || '').replace(/^\.\//, '').replace(/^\//, '');
+  if (!p) return '';
+  if (/^https?:\/\//i.test(p)) return p;
+  if (p.startsWith('imgs/slider/')) return `${REPO_RAW_BASE}/${p}`;
+  const isLocal =
+    typeof location !== 'undefined' &&
+    (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  return isLocal ? p : `${REPO_RAW_BASE}/${p}`;
+}
+
+function withCacheBust(url, v) {
+  if (!url) return '';
+  if (v == null || v === '') return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}v=${encodeURIComponent(String(v))}`;
+}
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxMNPTt_eiSoS9LIf-gbukhev0lMFdCmNGkJlWoBL0bhkwYlwpm76Df9hRM8DRQF932aw/exec';
 

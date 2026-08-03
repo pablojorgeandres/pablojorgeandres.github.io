@@ -33,6 +33,14 @@
 
     <!-- Home: mosaico de categorías -->
     <section id="homeCats" style="display:none">
+      <div id="homeSlider" class="place-slider is-hidden" hidden>
+        <div class="place-slider-viewport">
+          <div class="place-slider-track"></div>
+          <button type="button" class="place-slider-arrow place-slider-prev" data-slider-prev aria-label="Anterior"></button>
+          <button type="button" class="place-slider-arrow place-slider-next" data-slider-next aria-label="Siguiente"></button>
+        </div>
+        <div class="place-slider-dots" role="tablist" aria-label="Slides"></div>
+      </div>
       <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px">
         <div>
           <h2 style="margin:8px 0 12px">Explorá por categoría</h2>
@@ -117,10 +125,11 @@
     </div>
   </dialog>
 
-<script src="js/config.js"></script>
-<script src="js/catalog.js"></script>
-<script src="js/orders-api.js"></script>
-<script src="js/whatsapp.js"></script>
+<script src="js/config.js?v=18"></script>
+<script src="js/catalog.js?v=18"></script>
+<script src="js/orders-api.js?v=18"></script>
+<script src="js/whatsapp.js?v=18"></script>
+<script src="js/slider.js?v=18"></script>
 <script>
 /************ UTIL ************/
 const $ = sel => document.querySelector(sel);
@@ -531,11 +540,28 @@ function renderCategories(){
 function highlightCat(){ $$('#catBar .pill').forEach(el=>{ el.classList.toggle('active', el.textContent===state.category); }); }
 
 /************ HOME: MOSAICO DE CATEGORÍAS ************/
-function renderHomeCats(){
+async function openCategoryFromHome(cat){
+  if (!cat || !INDEX.includes(cat)) return;
+  state.category = cat;
+  showView('products');
+  $('#catTitle').textContent = cat;
+  renderCategories();
+  if (!DATA[cat]?.items) {
+    await fetchProductsForCategory(state.place, cat);
+  } else {
+    renderGrid();
+  }
+}
+
+async function renderHomeCats(){
   const host = $('#catsGrid');
   
   // Asegurar que estamos en modo categorías
   host.className = 'catsgrid';
+
+  if (typeof PlaceSlider !== 'undefined' && state.place) {
+    PlaceSlider.load(state.place, openCategoryFromHome);
+  }
   
   // Debug: mostrar qué categorías se van a renderizar
   console.log('🎨 Renderizando categorías:', INDEX);
@@ -584,17 +610,7 @@ function renderHomeCats(){
     arrow.textContent = '→';
     card.appendChild(left);
     card.appendChild(arrow);
-    card.onclick = async ()=>{
-      state.category = cat;
-      showView('products');
-      $('#catTitle').textContent = cat;
-      renderCategories();
-      if (!DATA[cat]?.items) {
-        await fetchProductsForCategory(state.place, cat);
-      } else {
-      renderGrid();
-      }
-    };
+    card.onclick = () => openCategoryFromHome(cat);
     host.appendChild(card);
   });
 }
@@ -808,8 +824,11 @@ function showView(v){
     if (!INDEX.length) {
       showCategoriesSkeleton();
     }
-  } else if (v === 'products') {
-    $('#grid').innerHTML = '';
+  } else {
+    if (typeof PlaceSlider !== 'undefined') PlaceSlider.hide();
+    if (v === 'products') {
+      $('#grid').innerHTML = '';
+    }
   }
   
   renderCategories();

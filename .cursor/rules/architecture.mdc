@@ -22,25 +22,28 @@ Cart → WhatsApp + form POST ORDERS_URL
        → findOrCreateClientCode_ (contacts SF/BA) → orders sheet (+ CodCliente)
 Dashboard → GET ORDERS_URL?action=clients|orders
          → remito POST (+ clientCode) → WhatsApp to client
+Dashboard slider → form POST ORDERS_URL (sliderData) → GitHub imgs/slider + data/{place}/slider.json
 ```
 
 ## Endpoints (`js/config.js`)
 
 - `DATA_BASE = 'data'`
-- `APPS_SCRIPT_URL` — search only (`?action=search&place=&q=`)
-- `ORDERS_URL` — order POST + dashboard GET (`appscript-pedidos.js`)
+- `APPS_SCRIPT_URL` — search (`?action=search`)
+- `ORDERS_URL` — order POST + dashboard GET (`clients`/`orders`/`slider`) + slider write (`sliderData`)
 
-Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS_URL` only.
+Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS_URL` only. Slider read/write also uses `ORDERS_URL`.
 
 ## Shared JS
 
 | File | Role |
 |------|------|
 | `js/config.js` | STORE, URLs, zones, `fmt` |
-| `js/catalog.js` | categories/products fetch, cache, code index |
+| `js/catalog.js` | categories/products/slider fetch, cache, code index |
 | `js/orders-api.js` | `postOrderToSheet`, `fetchOrdersApi` |
+| `js/slider-api.js` | `postSliderToSheet`, image compress |
+| `js/slider.js` | storefront place carousel |
 | `js/whatsapp.js` | customer→store + remito→client builders |
-| `js/dashboard.js` | back office UI |
+| `js/dashboard.js` | back office UI (clients, remito, slider) |
 
 ## Cache
 
@@ -59,8 +62,8 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 | File | Role |
 |------|------|
 | `appscript.js` | Catalog API `doGet` + server cache; legacy `doPost` |
-| `appscript-publish.js` | `publishCatalog()` → GitHub (`GITHUB_TOKEN` etc.) |
-| `appscript-pedidos.js` | Orders writer + `doGet` clients/orders; resolve CodCliente |
+| `appscript-publish.js` | `publishCatalog()` → GitHub; binary commit/delete helpers |
+| `appscript-pedidos.js` | Orders writer + `doGet` clients/orders/slider; slider GitHub write |
 
 Places: `santafe`, `buenosaires` (sheet IDs in `appscript.js` `PLACES`).
 

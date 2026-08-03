@@ -270,6 +270,15 @@ function doGet(e){
     return jsonOut_(data);
   }
 
+  // 5) Slider manifesto (lee desde GitHub)
+  if (action === "slider" && placeId) {
+    try {
+      return jsonOut_(readSliderManifest_(place.id));
+    } catch (err) {
+      return jsonOut_({ error: String(err && err.message || err), slides: [] });
+    }
+  }
+
   // Si llegamos aquí, es un endpoint no reconocido o falta información
   console.log(`DEBUG: Endpoint no reconocido o faltan parámetros`);
   
@@ -289,40 +298,192 @@ function doGet(e){
   // Devolver error para endpoints mal formados
   return jsonOut_({
     error: "Endpoint no reconocido",
-    validActions: ["categories", "products", "places", "search"],
+    validActions: ["categories", "products", "places", "search", "slider"],
     examples: [
       "?action=categories&place=santafe",
       "?action=products&place=santafe&category=Frutos Secos",
-      "?action=search&place=santafe&q=almendras"
+      "?action=search&place=santafe&q=almendras",
+      "?action=slider&place=santafe"
     ]
   });
 }
 
+/**
+ * HTML + postMessage para respuestas del editor de slider (form + iframe).
+ */
+function htmlOutSlider_(message){
+  const payload = Object.assign({ source: 'nimu-slider' }, message || {});
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body>
+      <script>
+        window.parent.postMessage(${JSON.stringify(payload)}, '*');
+      </script>
+    </body>
+    </html>
+  `;
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+const SLIDER_MAX_SLIDES = 7;
+
+function sliderManifestPath_(placeId) {
+  return "data/" + placeId + "/slider.json";
+}
+
+function sliderImagePath_(placeId, index) {
+  return "imgs/slider/" + placeId + "/" + index + ".jpg";
+}
+
+function normalizeSliderLink_(link) {
+  const raw = link && typeof link === "object" ? link : {};
+  const type = String(raw.type || "none").toLowerCase().trim();
+  if (type === "category") {
+    const category = String(raw.category || "").trim();
+    if (!category) return { type: "none" };
+    return { type: "category", category: category };
+  }
+  if (type === "external") {
+    const url = String(raw.url || "").trim();
+    if (!/^https?:\/\//i.test(url)) return { type: "none" };
+    return { type: "external", url: url };
+  }
+  return { type: "none" };
+}
+
+function isValidSliderPlace_(placeId) {
+  return PLACES.some(function(p) { return p.id === placeId; });
+}
+
+function readSliderManifest_(placeId) {
+  const gh = ghProps_();
+  if (!gh.token) throw new Error("Falta GITHUB_TOKEN en Script Properties");
+  const text = readGithubTextFile_(sliderManifestPath_(placeId), gh);
+  if (!text) return { slides: [] };
+  try {
+    const data = JSON.parse(text);
+    const slides = Array.isArray(data && data.slides) ? data.slides : [];
+    return { slides: slides };
+  } catch (err) {
+    return { slides: [] };
+  }
+}
+
+function writeSliderManifest_(placeId, manifest, gh) {
+  const slides = (manifest.slides || []).slice()
+    .filter(function(s) { return s && s.i >= 1 && s.i <= SLIDER_MAX_SLIDES; })
+    .sort(function(a, b) { return a.i - b.i; });
+  const body = JSON.stringify({ slides: slides }, null, 2);
+  commitFile_(sliderManifestPath_(placeId), body, gh);
+  return { slides: slides };
+}
+
+function handleSliderMutation_(payload) {
+  const placeId = String(payload.place || "").toLowerCase().trim();
+  if (!isValidSliderPlace_(placeId)) {
+    throw new Error("Lugar inválido: " + placeId);
+  }
+  const op = String(payload.op || "").toLowerCase().trim();
+  const index = parseInt(payload.i, 10);
+  if (!(index >= 1 && index <= SLIDER_MAX_SLIDES)) {
+    throw new Error("Índice de slide inválido (1–" + SLIDER_MAX_SLIDES + ")");
+  }
+
+  const gh = ghProps_();
+  if (!gh.token) throw new Error("Falta GITHUB_TOKEN en Script Properties");
+
+  const manifest = readSliderManifest_(placeId);
+  let slides = (manifest.slides || []).slice();
+  const existingIdx = slides.findIndex(function(s) { return Number(s.i) === index; });
+  const link = normalizeSliderLink_(payload.link);
+  const now = Math.floor(Date.now() / 1000);
+  const imgPath = sliderImagePath_(placeId, index);
+
+  if (op === "upsert") {
+    const imageBase64 = String(payload.imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "").replace(/\s/g, "");
+    if (!imageBase64) throw new Error("Falta imageBase64 para upsert");
+    commitBase64File_(imgPath, imageBase64, gh, "slider: upsert " + placeId + "/" + index);
+    const slide = {
+      i: index,
+      src: imgPath,
+      v: now,
+      link: link
+    };
+    if (existingIdx >= 0) slides[existingIdx] = slide;
+    else slides.push(slide);
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Slide actualizado", place: placeId, slides: saved.slides };
+  }
+
+  if (op === "meta") {
+    if (existingIdx < 0) throw new Error("No hay imagen en el slot " + index);
+    slides[existingIdx].link = link;
+    slides[existingIdx].v = now;
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Link actualizado", place: placeId, slides: saved.slides };
+  }
+
+  if (op === "remove") {
+    deleteFile_(imgPath, gh, "slider: remove " + placeId + "/" + index);
+    slides = slides.filter(function(s) { return Number(s.i) !== index; });
+    const saved = writeSliderManifest_(placeId, { slides: slides }, gh);
+    return { success: true, message: "Slide eliminado", place: placeId, slides: saved.slides };
+  }
+
+  throw new Error("op inválida (upsert|meta|remove)");
+}
+
 /** 
- * Handler para guardar pedidos (POST)
+ * Handler POST: slider editor (sliderData) o legacy pedidos en sheet de catálogo.
  */
 function doPost(e){
   try {
     const params = (e && e.parameter) || {};
+    let sliderPayload = null;
+
+    if (params.sliderData) {
+      sliderPayload = JSON.parse(params.sliderData);
+    } else if (e.postData && e.postData.contents) {
+      try {
+        const parsed = JSON.parse(e.postData.contents);
+        if (parsed && (parsed.op || parsed.imageBase64) && parsed.place && !parsed.items) {
+          sliderPayload = parsed;
+        } else if (parsed && parsed.place && Array.isArray(parsed.items)) {
+          const place = resolvePlace_(parsed.place);
+          const result = saveOrder_(place.sheetId, parsed);
+          return jsonOut_({ success: true, message: 'Pedido guardado correctamente', result });
+        }
+      } catch (parseErr) {
+        // fall through
+      }
+    }
+
+    if (sliderPayload) {
+      try {
+        const result = handleSliderMutation_(sliderPayload);
+        return htmlOutSlider_(result);
+      } catch (sliderErr) {
+        return htmlOutSlider_({ success: false, error: String(sliderErr && sliderErr.message || sliderErr) });
+      }
+    }
+
     const postData = e.postData ? e.postData.contents : null;
-    
     if (!postData) {
       return jsonOut_({ success: false, error: 'No hay datos en el POST' });
     }
-    
+
     const orderData = JSON.parse(postData);
-    
-    // Validar que tengamos los datos mínimos
+
     if (!orderData.place || !orderData.items || !Array.isArray(orderData.items)) {
       return jsonOut_({ success: false, error: 'Datos de pedido incompletos' });
     }
-    
-    // Resolver el lugar y obtener el spreadsheet ID
+
     const place = resolvePlace_(orderData.place);
-    
-    // Guardar el pedido
     const result = saveOrder_(place.sheetId, orderData);
-    
+
     return jsonOut_({ success: true, message: 'Pedido guardado correctamente', result });
   } catch(err) {
     console.error('Error en doPost:', err);

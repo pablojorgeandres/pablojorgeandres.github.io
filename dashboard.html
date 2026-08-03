@@ -6,7 +6,7 @@
   <title>Nimú — Dashboard</title>
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="dashboard.css?v=11">
+  <link rel="stylesheet" href="dashboard.css?v=14">
 </head>
 <body class="dash-body">
   <section id="loginView" class="dash-login">
@@ -38,6 +38,7 @@
       </div>
       <nav class="dash-nav" aria-label="Secciones">
         <button type="button" class="dash-nav-btn is-active" data-view="clients">Clientes</button>
+        <button type="button" class="dash-nav-btn" data-view="slider">Slider</button>
       </nav>
       <div class="dash-top-actions">
         <label class="dash-place-label">
@@ -161,6 +162,24 @@
           <button type="button" class="btn primary" id="remitoSubmitBtn">Guardar y enviar por WhatsApp</button>
         </div>
       </section>
+
+      <!-- Slider por lugar -->
+      <section id="sliderView" class="dash-panel" hidden>
+        <div class="dash-toolbar">
+          <h2>Slider — <span id="sliderPlaceLabel">Santa Fe</span></h2>
+        </div>
+        <p class="muted dash-status">Máximo 7 imágenes (JPG/PNG/WEBP/GIF, hasta 8 MB). Al reemplazar un slot se pisa el archivo anterior. Editá un lugar a la vez con el selector de arriba.</p>
+        <p id="sliderStatus" class="muted dash-status"></p>
+        <div class="dash-slider-wrap">
+          <div id="sliderSlots" class="dash-slider-slots"></div>
+          <div id="sliderBusyOverlay" class="dash-slider-overlay is-hidden" hidden aria-live="polite">
+            <div class="dash-slider-overlay-card">
+              <div class="dash-spinner" aria-hidden="true"></div>
+              <p id="sliderBusyLabel" class="dash-slider-overlay-label">Procesando…</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -174,10 +193,11 @@
     </div>
   </dialog>
 
-  <script src="js/config.js?v=11"></script>
-  <script src="js/catalog.js?v=11"></script>
-  <script src="js/orders-api.js?v=11"></script>
-  <script src="js/whatsapp.js?v=11"></script>
-  <script src="js/dashboard.js?v=11"></script>
+  <script src="js/config.js?v=16"></script>
+  <script src="js/catalog.js?v=16"></script>
+  <script src="js/orders-api.js?v=16"></script>
+  <script src="js/slider-api.js?v=16"></script>
+  <script src="js/whatsapp.js?v=16"></script>
+  <script src="js/dashboard.js?v=16"></script>
 </body>
 </html>

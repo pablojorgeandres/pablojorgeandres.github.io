@@ -1,6 +1,7 @@
 /** Nimú dashboard — clients, orders, remito */
 
 const DASH_AUTH_KEY = 'nimu_dash_auth_v1';
+const DASH_VIEW_KEY = 'nimu_dash_view_v1';
 const DASH_USER = 'Anto';
 const DASH_PASS = '19910211';
 
@@ -10,14 +11,18 @@ const state = {
   place: 'santafe',
   placeName: 'Santa Fe',
   places: [],
-  view: 'clients', // clients | clientDetail | remito
+  view: 'clients', // clients | clientDetail | remito | slider
   clients: [],
   clientFilter: '',
   selectedClient: null,
   remitoReturnView: 'clients',
   remitoCart: [],
   productIndex: null, // { byCode, list }
-  remitoIsNewClient: false
+  remitoIsNewClient: false,
+  sliderSlides: [],
+  sliderCategories: [],
+  sliderBusy: false,
+  sliderApiReady: false
 };
 
 /************ Modal (same pattern as store) ************/
@@ -88,11 +93,41 @@ function showApp() {
 }
 
 /************ Views ************/
+function navViewFor(view) {
+  return view === 'slider' ? 'slider' : 'clients';
+}
+
+function persistNavView(view) {
+  try {
+    sessionStorage.setItem(DASH_VIEW_KEY, navViewFor(view));
+  } catch (e) {}
+}
+
+function readPersistedNavView() {
+  try {
+    const v = sessionStorage.getItem(DASH_VIEW_KEY);
+    return v === 'slider' ? 'slider' : 'clients';
+  } catch (e) {
+    return 'clients';
+  }
+}
+
 function showView(view) {
   state.view = view;
   setVisible($('#clientsView'), view === 'clients');
   setVisible($('#clientDetailView'), view === 'clientDetail');
   setVisible($('#remitoView'), view === 'remito');
+  setVisible($('#sliderView'), view === 'slider');
+  document.querySelectorAll('.dash-nav-btn').forEach((btn) => {
+    const dataView = btn.getAttribute('data-view');
+    btn.classList.toggle(
+      'is-active',
+      dataView === view ||
+        (view === 'clientDetail' && dataView === 'clients') ||
+        (view === 'remito' && dataView === 'clients')
+    );
+  });
+  if (view === 'clients' || view === 'slider') persistNavView(view);
 }
 
 function phoneDigits(phone) {
@@ -592,6 +627,10 @@ function wireEvents() {
     state.placeName = meta ? meta.name : state.place;
     state.selectedClient = null;
     state.productIndex = null;
+    if (state.view === 'slider') {
+      await loadSliderEditor();
+      return;
+    }
     showView('clients');
     await loadClients();
   });
@@ -654,13 +693,364 @@ function wireEvents() {
 
   $('#remitoZone').addEventListener('change', renderRemitoItems);
   $('#remitoSubmitBtn').addEventListener('click', submitRemito);
+
+  document.querySelectorAll('.dash-nav-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const view = btn.getAttribute('data-view');
+      if (view === 'clients') {
+        showView('clients');
+        return;
+      }
+      if (view === 'slider') {
+        showView('slider');
+        await loadSliderEditor();
+      }
+    });
+  });
+}
+
+/************ Slider editor ************/
+const SLIDER_SLOT_COUNT = 7;
+
+function sliderByIndex(i) {
+  return (state.sliderSlides || []).find((s) => Number(s.i) === i) || null;
+}
+
+function setSliderStatus(msg) {
+  const el = $('#sliderStatus');
+  if (el) el.textContent = msg || '';
+}
+
+function setSliderBusy(busy, label) {
+  state.sliderBusy = !!busy;
+  const wrap = document.querySelector('.dash-slider-wrap');
+  const overlay = $('#sliderBusyOverlay');
+  const labelEl = $('#sliderBusyLabel');
+  if (wrap) wrap.classList.toggle('dash-slider-busy', !!busy);
+  if (labelEl && label) labelEl.textContent = label;
+  if (overlay) {
+    overlay.hidden = !busy;
+    overlay.classList.toggle('is-hidden', !busy);
+  }
+}
+
+function slidePreviewUrl(slide) {
+  if (!slide || !slide.src) return '';
+  return withCacheBust(resolveRepoAssetUrl(slide.src), slide.v != null ? slide.v : Date.now());
+}
+
+function renderSliderSlots() {
+  const host = $('#sliderSlots');
+  const label = $('#sliderPlaceLabel');
+  if (label) label.textContent = state.placeName || state.place;
+  if (!host) return;
+
+  const cats = state.sliderCategories || [];
+  host.innerHTML = '';
+
+  for (let i = 1; i <= SLIDER_SLOT_COUNT; i++) {
+    const slide = sliderByIndex(i);
+    const link = (slide && slide.link) || { type: 'none' };
+    const linkType = String(link.type || 'none');
+    const slot = document.createElement('article');
+    slot.className = 'dash-slider-slot';
+    slot.dataset.slot = String(i);
+
+    const previewHtml = slide
+      ? `<img src="${escapeHtml(slidePreviewUrl(slide))}" alt="" />`
+      : 'Vacío';
+
+    const catOptions = [
+      `<option value="">Elegí categoría…</option>`,
+      ...cats.map(
+        (c) =>
+          `<option value="${escapeHtml(c)}"${linkType === 'category' && link.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`
+      )
+    ].join('');
+
+    slot.innerHTML = `
+      <div class="dash-slider-preview">${previewHtml}</div>
+      <div class="dash-slider-slot-body">
+        <p class="dash-slider-slot-title">Posición ${i}</p>
+        <div class="dash-slider-actions">
+          <input type="file" accept="image/*" data-upload="${i}" ${slide ? '' : ''} aria-label="Subir imagen slot ${i}" />
+          <button type="button" class="btn" data-remove="${i}" ${slide ? '' : 'disabled'}>Quitar</button>
+        </div>
+        <div class="dash-slider-link-row">
+          <select data-link-type="${i}" aria-label="Tipo de link" ${slide ? '' : 'disabled'}>
+            <option value="none"${linkType === 'none' ? ' selected' : ''}>Sin link</option>
+            <option value="category"${linkType === 'category' ? ' selected' : ''}>Dentro de la tienda</option>
+            <option value="external"${linkType === 'external' ? ' selected' : ''}>Fuera (URL)</option>
+          </select>
+          <select data-link-category="${i}" aria-label="Categoría" ${linkType === 'category' && slide ? '' : 'hidden'}>
+            ${catOptions}
+          </select>
+          <input type="url" data-link-url="${i}" placeholder="https://…" value="${linkType === 'external' ? escapeHtml(link.url || '') : ''}" ${linkType === 'external' && slide ? '' : 'hidden'} ${slide ? '' : 'disabled'} />
+          <button type="button" class="btn primary" data-save-link="${i}" ${slide ? '' : 'disabled'}>Guardar link</button>
+        </div>
+      </div>
+    `;
+    host.appendChild(slot);
+  }
+}
+
+function readLinkFromSlot(i) {
+  const typeEl = $(`[data-link-type="${i}"]`);
+  const type = typeEl ? typeEl.value : 'none';
+  if (type === 'category') {
+    const catEl = $(`[data-link-category="${i}"]`);
+    return { type: 'category', category: catEl ? String(catEl.value || '').trim() : '' };
+  }
+  if (type === 'external') {
+    const urlEl = $(`[data-link-url="${i}"]`);
+    return { type: 'external', url: urlEl ? String(urlEl.value || '').trim() : '' };
+  }
+  return { type: 'none' };
+}
+
+function syncLinkFields(i) {
+  const typeEl = $(`[data-link-type="${i}"]`);
+  const catEl = $(`[data-link-category="${i}"]`);
+  const urlEl = $(`[data-link-url="${i}"]`);
+  if (!typeEl) return;
+  const type = typeEl.value;
+  if (catEl) {
+    catEl.hidden = type !== 'category';
+    catEl.disabled = type !== 'category';
+  }
+  if (urlEl) {
+    urlEl.hidden = type !== 'external';
+    urlEl.disabled = type !== 'external';
+  }
+}
+
+async function loadSliderEditor() {
+  setSliderStatus('Cargando slider…');
+  state.sliderApiReady = false;
+  try {
+    let slides = [];
+    try {
+      const apiData = await fetchSliderDataFromApi(state.place);
+      slides = apiData.slides || [];
+      state.sliderApiReady = true;
+    } catch (apiErr) {
+      console.warn('Slider API falló, uso JSON estático:', apiErr);
+      const msg = String(apiErr && apiErr.message || apiErr);
+      const needsDeploy =
+        /Acción inválida|Endpoint no reconocido|slider_not_deployed|validActions/i.test(msg) ||
+        (apiErr && apiErr.code === 'slider_not_deployed') ||
+        (Array.isArray(apiErr && apiErr.validActions) && !apiErr.validActions.includes('slider'));
+      if (needsDeploy || /Acción inválida|Endpoint no reconocido/i.test(msg)) {
+        setSliderStatus(
+          'Backend sin endpoint slider. Pegá resources/appscript-pedidos.js en el GAS de pedidos, agregá GITHUB_TOKEN en Script Properties y redeployá el Web App (ORDERS_URL).'
+        );
+      }
+      const local = await fetchSliderData(state.place, { bypassCache: true });
+      slides = local.slides || [];
+    }
+    state.sliderSlides = slides;
+    try {
+      const cats = await fetchCategoriesData(state.place);
+      state.sliderCategories = Object.keys(cats || {});
+    } catch (catErr) {
+      console.warn(catErr);
+      state.sliderCategories = [];
+    }
+    renderSliderSlots();
+    if (state.sliderApiReady) {
+      const n = state.sliderSlides.length;
+      setSliderStatus(n ? `${n} imagen${n === 1 ? '' : 'es'} configurada${n === 1 ? '' : 's'}.` : 'Sin imágenes todavía.');
+    }
+  } catch (err) {
+    console.error(err);
+    setSliderStatus('Error al cargar: ' + (err.message || err));
+  }
+}
+
+async function upsertSliderImage(i, file) {
+  if (!file || state.sliderBusy) return;
+
+  const check = validateSliderImageFile(file);
+  if (!check.ok) {
+    await appAlert(check.error);
+    setSliderStatus(check.error);
+    return;
+  }
+
+  const before = sliderByIndex(i);
+  const beforeV = before && before.v != null ? Number(before.v) : 0;
+
+  setSliderBusy(true, `Comprimiendo imagen ${i}…`);
+  setSliderStatus(`Comprimiendo imagen ${i}…`);
+  try {
+    const imageBase64 = await compressImageToJpegBase64(file);
+    const link = readLinkFromSlot(i);
+    setSliderBusy(true, `Subiendo imagen ${i}…`);
+    setSliderStatus(`Subiendo imagen ${i}… (puede tardar unos segundos)`);
+
+    const result = await postSliderToSheet(
+      {
+        op: 'upsert',
+        place: state.place,
+        i,
+        imageBase64,
+        link
+      },
+      {
+        expect: (data) => {
+          const slide = (data.slides || []).find((s) => Number(s.i) === i);
+          return !!(slide && Number(slide.v) > beforeV);
+        }
+      }
+    );
+    if (!result.success) {
+      const errMsg = result.error || 'No se pudo subir';
+      if (/Sin respuesta|Acción inválida|Endpoint no reconocido|GITHUB_TOKEN/i.test(errMsg)) {
+        throw new Error(
+          errMsg +
+            ' — Revisá: 1) pegar appscript-pedidos.js y redeploy ORDERS_URL, 2) GITHUB_TOKEN en Script Properties del proyecto de pedidos.'
+        );
+      }
+      throw new Error(errMsg);
+    }
+    state.sliderSlides = result.slides || [];
+    renderSliderSlots();
+    setSliderStatus(result.message || `Imagen ${i} guardada.`);
+  } catch (err) {
+    console.error(err);
+    await appAlert('Error al subir: ' + (err.message || err));
+    setSliderStatus('Error al subir.');
+  } finally {
+    setSliderBusy(false);
+  }
+}
+
+async function saveSliderLink(i) {
+  if (state.sliderBusy || !sliderByIndex(i)) return;
+  const link = readLinkFromSlot(i);
+  if (link.type === 'category' && !link.category) {
+    await appAlert('Elegí una categoría.');
+    return;
+  }
+  if (link.type === 'external' && !/^https?:\/\//i.test(link.url || '')) {
+    await appAlert('Ingresá una URL válida (https://…).');
+    return;
+  }
+  const before = sliderByIndex(i);
+  const beforeV = before && before.v != null ? Number(before.v) : 0;
+
+  setSliderBusy(true, `Guardando link ${i}…`);
+  setSliderStatus(`Guardando link ${i}…`);
+  try {
+    const result = await postSliderToSheet(
+      {
+        op: 'meta',
+        place: state.place,
+        i,
+        link
+      },
+      {
+        expect: (data) => {
+          const slide = (data.slides || []).find((s) => Number(s.i) === i);
+          if (!slide) return false;
+          if (Number(slide.v) > beforeV) return true;
+          const L = slide.link || {};
+          if (link.type === 'none') return (L.type || 'none') === 'none';
+          if (link.type === 'category') return L.type === 'category' && L.category === link.category;
+          if (link.type === 'external') return L.type === 'external' && L.url === link.url;
+          return false;
+        }
+      }
+    );
+    if (!result.success) throw new Error(result.error || 'No se pudo guardar');
+    state.sliderSlides = result.slides || [];
+    renderSliderSlots();
+    setSliderStatus(result.message || 'Link guardado.');
+  } catch (err) {
+    console.error(err);
+    await appAlert('Error: ' + (err.message || err));
+    setSliderStatus('Error al guardar link.');
+  } finally {
+    setSliderBusy(false);
+  }
+}
+
+async function removeSliderSlot(i) {
+  if (state.sliderBusy || !sliderByIndex(i)) return;
+  const ok = await appConfirm(`¿Quitar la imagen de la posición ${i}?`);
+  if (!ok) return;
+  setSliderBusy(true, `Eliminando imagen ${i}…`);
+  setSliderStatus(`Eliminando imagen ${i}…`);
+  try {
+    const result = await postSliderToSheet(
+      {
+        op: 'remove',
+        place: state.place,
+        i
+      },
+      {
+        expect: (data) => !(data.slides || []).some((s) => Number(s.i) === i)
+      }
+    );
+    if (!result.success) throw new Error(result.error || 'No se pudo eliminar');
+    state.sliderSlides = result.slides || [];
+    renderSliderSlots();
+    setSliderStatus(result.message || `Imagen ${i} eliminada.`);
+  } catch (err) {
+    console.error(err);
+    await appAlert('Error: ' + (err.message || err));
+    setSliderStatus('Error al eliminar.');
+  } finally {
+    setSliderBusy(false);
+  }
+}
+
+function wireSliderEditor() {
+  const host = $('#sliderSlots');
+  if (!host || host.dataset.wired === '1') return;
+  host.dataset.wired = '1';
+
+  host.addEventListener('change', async (e) => {
+    const upload = e.target.closest('[data-upload]');
+    if (upload) {
+      const i = parseInt(upload.getAttribute('data-upload'), 10);
+      const file = upload.files && upload.files[0];
+      upload.value = '';
+      if (file) await upsertSliderImage(i, file);
+      return;
+    }
+    const typeEl = e.target.closest('[data-link-type]');
+    if (typeEl) {
+      syncLinkFields(parseInt(typeEl.getAttribute('data-link-type'), 10));
+    }
+  });
+
+  host.addEventListener('click', async (e) => {
+    const removeBtn = e.target.closest('[data-remove]');
+    if (removeBtn) {
+      await removeSliderSlot(parseInt(removeBtn.getAttribute('data-remove'), 10));
+      return;
+    }
+    const saveBtn = e.target.closest('[data-save-link]');
+    if (saveBtn) {
+      await saveSliderLink(parseInt(saveBtn.getAttribute('data-save-link'), 10));
+    }
+  });
 }
 
 async function bootApp() {
   showApp();
-  showView('clients');
   await initPlaces();
-  await loadClients();
+  wireSliderEditor();
+
+  const startView = readPersistedNavView();
+  if (startView === 'slider') {
+    showView('slider');
+    await loadSliderEditor();
+  } else {
+    showView('clients');
+    await loadClients();
+  }
 }
 
 async function init() {
