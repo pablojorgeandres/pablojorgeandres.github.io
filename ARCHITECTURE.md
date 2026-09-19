@@ -155,7 +155,7 @@ On each order:
 
 Read cache: `CacheService` ~90s (`clients_v1_*`, `orders_v1_*`).
 
-Order columns: `Fecha y Hora`, `CodCliente`, `Nombre`, `Teléfono`, `Dirección`, `Zona`, `Lugar`, `Notas`, `Detalle Producto`, `Codigo Producto`, `Cantidad` (sin DNI).
+Order columns: `Fecha y Hora`, `CodCliente`, `Nombre`, `Teléfono`, `Dirección`, `Zona`, `Lugar`, `Notas`, `Detalle Producto`, `Codigo Producto`, `Cantidad`, `Precio Unitario`, `Precio Final`, `% Descuento` (sin DNI).
 
 **Deploy (manual):** paste updated script into GAS project → ensure edit access to contacts sheet → set `GITHUB_TOKEN` (for slider) → redeploy Web App version (keep `ORDERS_URL` if updating same deployment). Required after adding `doGet`/`sliderData` for the dashboard.
 

@@ -24,6 +24,31 @@ function formatOrderItemLine(item) {
   return `• ${item.name}${variant} x${item.qty} — ${fmt.format(lineTotal)}`;
 }
 
+function remitoItemListAmount(item) {
+  const list = Number(item.listPrice);
+  const fallback = Number(item.price) || 0;
+  return (Number.isFinite(list) ? list : fallback) * (item.qty || 0);
+}
+
+function remitoItemNetAmount(item) {
+  const unit = Number(item.unitPrice);
+  const fallback = Number(item.price) || 0;
+  return (Number.isFinite(unit) ? unit : fallback) * (item.qty || 0);
+}
+
+function formatRemitoItemLine(item) {
+  const variant = item.variant ? ` (${item.variant})` : '';
+  const gross = remitoItemListAmount(item);
+  const net = remitoItemNetAmount(item);
+  const pct = Number(item.discountPct);
+  const hasDiscount = Number.isFinite(pct) ? pct !== 0 : gross !== net;
+  if (!hasDiscount) {
+    return `•  ${item.name}${variant} x${item.qty} — ${fmt.format(net)}`;
+  }
+  const pctLabel = `${pct > 0 ? '-' : '+'}${Math.abs(pct)}%`;
+  return `•  ${item.name}${variant} x${item.qty} — ~${fmt.format(gross)}~ ${fmt.format(net)} (${pctLabel})`;
+}
+
 function buildWaMeURL(phone, lines) {
   const normalized = normalizeWaPhone(phone);
   if (!normalized || normalized.length < 11 || normalized.length > 15) return '#';
@@ -62,29 +87,37 @@ function buildRemitoWhatsAppURL({
   clientName,
   cart,
   subtotal,
+  discountTotal,
   shippingLine,
   total
 }) {
   if (!cart || !cart.length) return '#';
 
-  const greetingName = (clientName || '').trim() || 'hola';
-  const itemLines = cart.map((item) => {
-    const variant = item.variant ? ` (${item.variant})` : '';
-    const lineTotal = (item.price || 0) * (item.qty || 0);
-    return `•  ${item.name}${variant} x${item.qty} — ${fmt.format(lineTotal)}`;
-  });
+  const name = (clientName || '').trim();
+  const greeting = name
+    ? `${name} cómo estás? Te envío el detalle de tu pedido:`
+    : 'Hola cómo estás? Te envío el detalle de tu pedido:';
+  const itemLines = cart.map(formatRemitoItemLine);
+  const disc = Number(discountTotal);
+  const discountLine = Number.isFinite(disc)
+    ? disc
+    : cart.reduce((s, item) => s + remitoItemListAmount(item) - remitoItemNetAmount(item), 0);
+  let discountText = fmt.format(0);
+  if (discountLine > 0) discountText = '-' + fmt.format(discountLine);
+  else if (discountLine < 0) discountText = '+' + fmt.format(-discountLine);
 
   const lines = [
-    `Hola ${greetingName}! Te envio el detalle del pedido de Nimu:`,
+    greeting,
     '',
     ...itemLines,
     '',
     `Subtotal: ${fmt.format(subtotal)}`,
+    `Descuento: ${discountText}`,
     `Envío: ${shippingLine}`,
     `*TOTAL: ${fmt.format(total)}*`,
     '',
     '',
-    '*Datos para realizar la transferencia*',
+    'Te comparto también los datos para realizar la transferencia:',
     '',
     `*Alias:* somosnimu`,
     `*Cuenta:* Mercado pago`,

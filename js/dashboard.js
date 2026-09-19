@@ -83,6 +83,7 @@ function setVisible(el, visible) {
 }
 
 function showLogin() {
+  document.body.classList.remove('dash-remito-open');
   setVisible($('#loginView'), true);
   setVisible($('#appShell'), false);
 }
@@ -127,6 +128,7 @@ function showView(view) {
         (view === 'remito' && dataView === 'clients')
     );
   });
+  document.body.classList.toggle('dash-remito-open', view === 'remito');
   if (view === 'clients' || view === 'slider') persistNavView(view);
 }
 
@@ -138,6 +140,20 @@ function displayPhone(phone) {
   const s = String(phone || '').trim();
   if (!s) return '—';
   return s.replace(/^CELU:\s*/i, '');
+}
+
+function clientPhoneDetailHtml(phone) {
+  const shown = displayPhone(phone);
+  const digits = phoneDigits(shown);
+  if (!shown || shown === '—' || digits.length < 8) {
+    return `<dd>${escapeHtml(shown || '—')}</dd>`;
+  }
+  const wa = typeof normalizeWaPhone === 'function' ? normalizeWaPhone(shown) : '';
+  const waHref = wa && wa.length >= 11 && wa.length <= 15 ? `https://wa.me/${wa}` : '';
+  return `<dd class="dash-detail-phone">
+    <a class="dash-phone-link" href="tel:${escapeHtml(digits)}">${escapeHtml(shown)}</a>
+    ${waHref ? `<a class="dash-wa-link" href="${escapeHtml(waHref)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+  </dd>`;
 }
 
 function filterClients(list, q) {
@@ -173,7 +189,7 @@ function renderClientsTable() {
 
   if (!filtered.length) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" class="muted">Sin resultados</td>`;
+    tr.innerHTML = `<td colspan="5" class="muted dash-table-empty">Sin resultados</td>`;
     tr.style.cursor = 'default';
     body.appendChild(tr);
     return;
@@ -182,10 +198,10 @@ function renderClientsTable() {
   filtered.forEach((c) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><strong>${escapeHtml(c.code)}</strong></td>
-      <td>${escapeHtml(c.name || '—')}</td>
-      <td>${escapeHtml(displayPhone(c.phone))}</td>
-      <td>${escapeHtml(c.locality || '—')}</td>
+      <td data-label="Código"><strong>${escapeHtml(c.code)}</strong></td>
+      <td data-label="Nombre">${escapeHtml(c.name || '—')}</td>
+      <td data-label="Teléfono">${escapeHtml(displayPhone(c.phone))}</td>
+      <td data-label="Localidad">${escapeHtml(c.locality || '—')}</td>
       <td class="dash-row-actions">
         <button type="button" class="btn" data-act="remito">Remito</button>
       </td>`;
@@ -217,7 +233,7 @@ async function openClientDetail(client) {
   card.innerHTML = `
     <div><dt>Código</dt><dd>${escapeHtml(client.code)}</dd></div>
     <div><dt>Nombre</dt><dd>${escapeHtml(client.name || '—')}</dd></div>
-    <div><dt>Teléfono</dt><dd>${escapeHtml(displayPhone(client.phone))}</dd></div>
+    <div><dt>Teléfono</dt>${clientPhoneDetailHtml(client.phone)}</div>
     <div><dt>Localidad</dt><dd>${escapeHtml(client.locality || '—')}</dd></div>
     <div><dt>DNI</dt><dd>${escapeHtml(client.dni || '—')}</dd></div>`;
 
@@ -240,12 +256,25 @@ async function openClientDetail(client) {
       const el = document.createElement('article');
       el.className = 'dash-order';
       const items = (o.items || [])
-        .map(
-          (it) =>
-            `<li>${escapeHtml(it.name || it.code || 'Ítem')}${
-              it.code ? ` <span class="muted">(${escapeHtml(it.code)})</span>` : ''
-            } × ${it.qty || 0}</li>`
-        )
+        .map((it) => {
+          const line = Number(it.subtotal);
+          const unit = Number(it.unitPrice);
+          const money = Number.isFinite(line)
+            ? line
+            : Number.isFinite(unit)
+              ? unit * (it.qty || 0)
+              : null;
+          const pct = Number(it.discountPct);
+          const extra = [
+            money != null ? fmt.format(money) : '',
+            Number.isFinite(pct) && pct ? `(${pct}%)` : ''
+          ]
+            .filter(Boolean)
+            .join(' ');
+          return `<li>${escapeHtml(it.name || it.code || 'Ítem')}${
+            it.code ? ` <span class="muted">(${escapeHtml(it.code)})</span>` : ''
+          } × ${it.qty || 0}${extra ? ` — ${escapeHtml(extra)}` : ''}</li>`;
+        })
         .join('');
       el.innerHTML = `
         <div class="dash-order-head">
@@ -395,8 +424,65 @@ function findProductByQuery(q) {
   );
 }
 
+function remitoItemListPrice(item) {
+  const n = Number(item && item.listPrice);
+  if (Number.isFinite(n)) return n;
+  return Number(item && item.price) || 0;
+}
+
+function remitoItemUnitPrice(item) {
+  const n = Number(item && item.unitPrice);
+  if (Number.isFinite(n)) return n;
+  return Number(item && item.price) || 0;
+}
+
+function remitoItemDiscountPct(item) {
+  const n = Number(item && item.discountPct);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function remitoItemLineTotal(item) {
+  return remitoItemUnitPrice(item) * (item.qty || 0);
+}
+
+function applyRemitoUnitPrice(item, raw) {
+  const list = remitoItemListPrice(item);
+  const parsed = Math.round(Number(raw));
+  item.unitPrice = Number.isFinite(parsed) ? parsed : 0;
+  item.price = item.unitPrice;
+  item.discountPct = list ? Math.round((1 - item.unitPrice / list) * 100) : 0;
+}
+
+function applyRemitoDiscountPct(item, raw) {
+  const list = remitoItemListPrice(item);
+  const parsed = Math.round(Number(raw));
+  item.discountPct = Number.isFinite(parsed) ? parsed : 0;
+  if (!list) {
+    item.unitPrice = remitoItemUnitPrice(item);
+    item.price = item.unitPrice;
+    return;
+  }
+  item.unitPrice = Math.round(list * (1 - item.discountPct / 100));
+  item.price = item.unitPrice;
+}
+
 function remitoSubtotal() {
-  return state.remitoCart.reduce((s, i) => s + i.price * i.qty, 0);
+  return state.remitoCart.reduce((s, i) => s + remitoItemLineTotal(i), 0);
+}
+
+function remitoSubtotalBruto() {
+  return state.remitoCart.reduce((s, i) => s + remitoItemListPrice(i) * (i.qty || 0), 0);
+}
+
+function remitoDiscountTotal() {
+  return remitoSubtotalBruto() - remitoSubtotal();
+}
+
+function formatSignedMoney(amount) {
+  const n = Math.round(Number(amount) || 0);
+  if (n > 0) return '−' + fmt.format(n);
+  if (n < 0) return '+' + fmt.format(-n);
+  return fmt.format(0);
 }
 
 function remitoZoneId() {
@@ -417,27 +503,35 @@ function renderRemitoItems() {
   const body = $('#remitoItemsBody');
   body.innerHTML = '';
   if (!state.remitoCart.length) {
-    body.innerHTML = `<tr><td colspan="5" class="muted">Agregá productos por código</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="muted dash-table-empty">Agregá productos por código</td></tr>`;
   } else {
     state.remitoCart.forEach((item, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${escapeHtml(item.code)}</td>
-        <td>${escapeHtml(item.name)}${item.variant ? ` <span class="muted">(${escapeHtml(item.variant)})</span>` : ''}</td>
-        <td>
+        <td data-label="Código"><span class="remito-item-code">${escapeHtml(item.code)}</span></td>
+        <td data-label="Producto"><span class="remito-item-name">${escapeHtml(item.name)}${item.variant ? ` <span class="muted">(${escapeHtml(item.variant)})</span>` : ''}</span></td>
+        <td data-label="Cant.">
           <input type="number" min="1" value="${item.qty}" data-idx="${idx}" class="dash-qty remito-qty-input" />
         </td>
-        <td>${fmt.format(item.price * item.qty)}</td>
+        <td data-label="P. unitario">
+          <input type="number" step="1" value="${remitoItemUnitPrice(item)}" data-idx="${idx}" class="dash-qty remito-unit-input" />
+        </td>
+        <td data-label="% Desc.">
+          <input type="number" step="1" value="${remitoItemDiscountPct(item)}" data-idx="${idx}" class="dash-qty remito-disc-input" />
+        </td>
+        <td data-label="Precio final">${fmt.format(remitoItemLineTotal(item))}</td>
         <td class="dash-row-actions"><button type="button" class="btn" data-rm="${idx}">Quitar</button></td>`;
       body.appendChild(tr);
     });
   }
 
-  const sub = remitoSubtotal();
+  const bruto = remitoSubtotalBruto();
+  const net = remitoSubtotal();
   const ship = remitoShippingPrice();
-  $('#remitoSubtotal').textContent = fmt.format(sub);
+  $('#remitoSubtotal').textContent = fmt.format(bruto);
+  $('#remitoDiscount').textContent = formatSignedMoney(remitoDiscountTotal());
   $('#remitoShipping').textContent = fmt.format(ship);
-  $('#remitoTotal').textContent = fmt.format(sub + ship);
+  $('#remitoTotal').textContent = fmt.format(net + ship);
 }
 
 function addRemitoProduct() {
@@ -451,11 +545,15 @@ function addRemitoProduct() {
   const existing = state.remitoCart.find((i) => i.code.toUpperCase() === found.code.toUpperCase());
   if (existing) existing.qty += qty;
   else {
+    const listPrice = Math.round(+found.price || 0);
     state.remitoCart.push({
       code: found.code,
       name: found.name,
       variant: found.variant || '',
-      price: found.price,
+      listPrice,
+      unitPrice: listPrice,
+      discountPct: 0,
+      price: listPrice,
       qty
     });
   }
@@ -509,6 +607,8 @@ async function submitRemito() {
   }
 
   const sub = remitoSubtotal();
+  const subGross = remitoSubtotalBruto();
+  const discountTotal = remitoDiscountTotal();
   const ship = remitoShippingPrice();
   const total = sub + ship;
   const zoneOpt = getZoneOption(state.place, remitoZoneId());
@@ -523,10 +623,15 @@ async function submitRemito() {
       name: i.name,
       variant: i.variant,
       qty: i.qty,
-      price: i.price,
-      subtotal: i.price * i.qty
+      price: remitoItemUnitPrice(i),
+      listPrice: remitoItemListPrice(i),
+      unitPrice: remitoItemUnitPrice(i),
+      discountPct: remitoItemDiscountPct(i),
+      subtotal: remitoItemLineTotal(i)
     })),
     subtotal: sub,
+    subtotalGross: subGross,
+    discountTotal,
     shipping: {
       label: shippingLine,
       price: ship,
@@ -543,7 +648,8 @@ async function submitRemito() {
     clientPhone: customer.phone,
     clientName: customer.name,
     cart: state.remitoCart,
-    subtotal: sub,
+    subtotal: subGross,
+    discountTotal,
     shippingLine,
     total
   });
@@ -681,14 +787,22 @@ function wireEvents() {
   });
 
   $('#remitoItemsBody').addEventListener('change', (e) => {
-    const input = e.target.closest('.remito-qty-input');
+    const qtyInput = e.target.closest('.remito-qty-input');
+    const unitInput = e.target.closest('.remito-unit-input');
+    const discInput = e.target.closest('.remito-disc-input');
+    const input = qtyInput || unitInput || discInput;
     if (!input) return;
     const idx = parseInt(input.getAttribute('data-idx'), 10);
-    const qty = Math.max(1, parseInt(input.value, 10) || 1);
-    if (state.remitoCart[idx]) {
-      state.remitoCart[idx].qty = qty;
-      renderRemitoItems();
+    const item = state.remitoCart[idx];
+    if (!item) return;
+    if (qtyInput) {
+      item.qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+    } else if (unitInput) {
+      applyRemitoUnitPrice(item, unitInput.value);
+    } else {
+      applyRemitoDiscountPct(item, discInput.value);
     }
+    renderRemitoItems();
   });
 
   $('#remitoZone').addEventListener('change', renderRemitoItems);

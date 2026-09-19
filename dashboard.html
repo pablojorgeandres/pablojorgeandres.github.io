@@ -6,7 +6,7 @@
   <title>Nimú — Dashboard</title>
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="dashboard.css?v=14">
+  <link rel="stylesheet" href="dashboard.css?v=18">
 </head>
 <body class="dash-body">
   <section id="loginView" class="dash-login">
@@ -142,7 +142,9 @@
                     <th>Código</th>
                     <th>Producto</th>
                     <th>Cant.</th>
-                    <th>Precio</th>
+                    <th>P. unitario</th>
+                    <th>% Desc.</th>
+                    <th>Precio final</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -151,6 +153,7 @@
             </div>
             <div class="dash-totals-box">
               <div class="row"><span>Subtotal</span><strong id="remitoSubtotal">$0</strong></div>
+              <div class="row"><span>Descuento</span><strong id="remitoDiscount">$0</strong></div>
               <div class="row"><span>Envío</span><strong id="remitoShipping">$0</strong></div>
               <div class="row"><span>Total</span><strong id="remitoTotal">$0</strong></div>
             </div>
@@ -197,7 +200,7 @@
   <script src="js/catalog.js?v=16"></script>
   <script src="js/orders-api.js?v=16"></script>
   <script src="js/slider-api.js?v=16"></script>
-  <script src="js/whatsapp.js?v=16"></script>
-  <script src="js/dashboard.js?v=16"></script>
+  <script src="js/whatsapp.js?v=17"></script>
+  <script src="js/dashboard.js?v=19"></script>
 </body>
 </html>

@@ -147,7 +147,7 @@
 <script src="js/config.js?v=18"></script>
 <script src="js/catalog.js?v=18"></script>
 <script src="js/orders-api.js?v=18"></script>
-<script src="js/whatsapp.js?v=18"></script>
+<script src="js/whatsapp.js?v=19"></script>
 <script src="js/slider.js?v=18"></script>
 <script>
 /************ UTIL ************/
@@ -1240,6 +1240,9 @@ async function sendOrderToSheet(){
       variant: i.variant,
       qty: i.qty,
       price: i.price,
+      listPrice: i.price,
+      unitPrice: i.price,
+      discountPct: 0,
       subtotal: i.price * i.qty
     })),
     subtotal: sub,

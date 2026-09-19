@@ -44,7 +44,24 @@ const CONTACT_SHEETS = {
   buenosaires: { tab: "DB CONTACTS BA", prefix: "B" }
 };
 
-const EMPTY_ORDER_ROW = [' ', '', '', '', '', '', '', '', '', '', ''];
+const ORDER_HEADERS = [
+  'Fecha y Hora',
+  'CodCliente',
+  'Nombre',
+  'Teléfono',
+  'Dirección',
+  'Zona',
+  'Lugar',
+  'Notas',
+  'Detalle Producto',
+  'Codigo Producto',
+  'Cantidad',
+  'Precio Unitario',
+  'Precio Final',
+  '% Descuento'
+];
+
+const EMPTY_ORDER_ROW = [' ', '', '', '', '', '', '', '', '', '', '', '', '', ''];
 
 /** Utils **/
 function jsonOut_(obj){
@@ -651,7 +668,8 @@ function isEmptyOrderSeparatorRow_(row) {
 
 /**
  * Parsea filas del sheet de pedidos en bloques {timestamp, clientCode, customer, items}.
- * Columnas: Fecha, CodCliente, Nombre, Teléfono, Dirección, Zona, Lugar, Notas, Producto, Código, Cantidad.
+ * Columnas: Fecha, CodCliente, Nombre, Teléfono, Dirección, Zona, Lugar, Notas,
+ * Producto, Código, Cantidad, Precio Unitario, Precio Final, % Descuento.
  */
 function parseOrdersFromRows_(values) {
   const orders = [];
@@ -711,7 +729,10 @@ function parseOrdersFromRows_(values) {
       current.items.push({
         name: itemName,
         code: itemCode,
-        qty: Number(itemQty) || 0
+        qty: Number(itemQty) || 0,
+        unitPrice: Number(row[11]) || 0,
+        subtotal: Number(row[12]) || 0,
+        discountPct: Number(row[13]) || 0
       });
     }
   }
@@ -751,7 +772,7 @@ function listOrders_(place, clientCode, q) {
     return empty;
   }
 
-  const values = sheet.getRange(1, 1, lastRow, 11).getValues();
+  const values = sheet.getRange(1, 1, lastRow, 14).getValues();
   let orders = parseOrdersFromRows_(values);
 
   if (codeFilter && isValidClientCode_(codeFilter)) {
@@ -801,6 +822,11 @@ function doGet(e) {
       return jsonOut_(listOrders_(place, p.clientCode, p.q));
     }
 
+    if (action === "ensureheaders") {
+      addOrderDiscountHeaders();
+      return jsonOut_({ success: true, message: "headers ok" });
+    }
+
     if (action === "slider") {
       if (!place) return jsonOut_({ error: "Falta place" });
       if (!isValidSliderPlace_(place)) return jsonOut_({ error: "Lugar inválido", slides: [] });
@@ -816,7 +842,7 @@ function doGet(e) {
 
     return jsonOut_({
       error: "Acción inválida",
-      validActions: ["clients", "orders", "slider"],
+      validActions: ["clients", "orders", "slider", "ensureheaders"],
       examples: [
         "?action=clients&place=santafe",
         "?action=orders&place=santafe&clientCode=S1",
@@ -877,6 +903,37 @@ function doPost(e){
   }
 }
 
+function orderItemPriceCols_(item) {
+  const qty = item.qty || 0;
+  const unit = item.unitPrice != null ? Number(item.unitPrice) : (Number(item.price) || 0);
+  const line = item.subtotal != null ? Number(item.subtotal) : unit * qty;
+  const pct = item.discountPct != null ? Number(item.discountPct) : 0;
+  return [unit || 0, line || 0, pct || 0];
+}
+
+/**
+ * Completa encabezados A–N en pestañas de pedidos ya existentes.
+ * No pisa celdas que ya tienen texto.
+ */
+function ensureOrderHeaders_(sheet) {
+  const headers = sheet.getRange(1, 1, 1, ORDER_HEADERS.length).getValues()[0];
+  let dirty = false;
+  for (let i = 0; i < ORDER_HEADERS.length; i++) {
+    if (!String(headers[i] || "").trim()) {
+      headers[i] = ORDER_HEADERS[i];
+      dirty = true;
+    }
+  }
+  if (!dirty) return;
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight("bold");
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setBackground("#4285f4");
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontColor("#ffffff");
+  sheet.setColumnWidth(12, 120);
+  sheet.setColumnWidth(13, 120);
+  sheet.setColumnWidth(14, 110);
+}
+
 /**
  * Guarda un pedido en la pestaña correspondiente al lugar.
  * Formato: una fila por producto, CodCliente tras Fecha, separadores vacíos.
@@ -890,24 +947,10 @@ function saveOrder_(orderData) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
 
-    const headers = [
-      'Fecha y Hora',
-      'CodCliente',
-      'Nombre',
-      'Teléfono',
-      'Dirección',
-      'Zona',
-      'Lugar',
-      'Notas',
-      'Detalle Producto',
-      'Codigo Producto',
-      'Cantidad'
-    ];
-
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-    sheet.getRange(1, 1, 1, headers.length).setBackground('#4285f4');
-    sheet.getRange(1, 1, 1, headers.length).setFontColor('#ffffff');
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setBackground('#4285f4');
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontColor('#ffffff');
     sheet.setFrozenRows(1);
 
     sheet.setColumnWidth(1, 160);  // Fecha y Hora
@@ -921,7 +964,12 @@ function saveOrder_(orderData) {
     sheet.setColumnWidth(9, 200);  // Detalle Producto
     sheet.setColumnWidth(10, 120); // Codigo Producto
     sheet.setColumnWidth(11, 80);  // Cantidad
+    sheet.setColumnWidth(12, 120); // Precio Unitario
+    sheet.setColumnWidth(13, 120); // Precio Final
+    sheet.setColumnWidth(14, 110); // % Descuento
   }
+
+  ensureOrderHeaders_(sheet);
 
   const timestamp = formatTimestamp_(orderData.timestamp || new Date().toISOString());
   const customer = orderData.customer || {};
@@ -945,6 +993,7 @@ function saveOrder_(orderData) {
   items.forEach((item, index) => {
     let row;
 
+    const priceCols = orderItemPriceCols_(item);
     if (index === 0) {
       row = [
         timestamp,                    // Fecha y Hora
@@ -958,14 +1007,14 @@ function saveOrder_(orderData) {
         item.name || '',              // Detalle Producto
         item.code || '',              // Codigo Producto
         item.qty || 0                 // Cantidad
-      ];
+      ].concat(priceCols);
     } else {
       row = [
         '', '', '', '', '', '', '', '',
         item.name || '',
         item.code || '',
         item.qty || 0
-      ];
+      ].concat(priceCols);
     }
 
     sheet.appendRow(row);
@@ -980,6 +1029,18 @@ function saveOrder_(orderData) {
     rowsInserted: items.length + 2,
     sheetName: sheetName
   };
+}
+
+/** Escribe L1–N1 en Santa Fe y Buenos Aires si están vacías. */
+function addOrderDiscountHeaders() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const tabs = Object.keys(PLACE_SHEETS).map(function (place) {
+    return PLACE_SHEETS[place];
+  });
+  tabs.forEach(function (name) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) ensureOrderHeaders_(sheet);
+  });
 }
 
 /**
