@@ -199,7 +199,7 @@ function renderClientsTable() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Código"><strong>${escapeHtml(c.code)}</strong></td>
-      <td data-label="Nombre">${escapeHtml(c.name || '—')}</td>
+      <td data-label="Nombre"><span class="dash-client-name">${escapeHtml(c.name || '—')}</span></td>
       <td data-label="Teléfono">${escapeHtml(displayPhone(c.phone))}</td>
       <td data-label="Localidad">${escapeHtml(c.locality || '—')}</td>
       <td class="dash-row-actions">
@@ -503,24 +503,46 @@ function renderRemitoItems() {
   const body = $('#remitoItemsBody');
   body.innerHTML = '';
   if (!state.remitoCart.length) {
-    body.innerHTML = `<tr><td colspan="7" class="muted dash-table-empty">Agregá productos por código</td></tr>`;
+    body.innerHTML = `<tr><td class="muted dash-table-empty">Agregá productos por código</td></tr>`;
   } else {
     state.remitoCart.forEach((item, idx) => {
       const tr = document.createElement('tr');
+      tr.className = 'remito-item-row';
       tr.innerHTML = `
-        <td data-label="Código"><span class="remito-item-code">${escapeHtml(item.code)}</span></td>
-        <td data-label="Producto"><span class="remito-item-name">${escapeHtml(item.name)}${item.variant ? ` <span class="muted">(${escapeHtml(item.variant)})</span>` : ''}</span></td>
-        <td data-label="Cant.">
-          <input type="number" min="1" value="${item.qty}" data-idx="${idx}" class="dash-qty remito-qty-input" />
-        </td>
-        <td data-label="P. unitario">
-          <input type="number" step="1" value="${remitoItemUnitPrice(item)}" data-idx="${idx}" class="dash-qty remito-unit-input" />
-        </td>
-        <td data-label="% Desc.">
-          <input type="number" step="1" value="${remitoItemDiscountPct(item)}" data-idx="${idx}" class="dash-qty remito-disc-input" />
-        </td>
-        <td data-label="Precio final">${fmt.format(remitoItemLineTotal(item))}</td>
-        <td class="dash-row-actions"><button type="button" class="btn" data-rm="${idx}">Quitar</button></td>`;
+        <td class="remito-item-cell">
+          <div class="remito-item-head">
+            <span class="remito-item-name">${escapeHtml(item.name)}${item.variant ? ` <span class="muted">(${escapeHtml(item.variant)})</span>` : ''}</span>
+            <span class="remito-item-code">${escapeHtml(item.code)}</span>
+          </div>
+          <div class="remito-item-fields">
+            <label class="remito-field">
+              <span>Cant.</span>
+              <input type="number" min="1" value="${item.qty}" data-idx="${idx}" class="dash-qty remito-qty-input" />
+            </label>
+            <label class="remito-field">
+              <span>P. unitario</span>
+              <input type="number" step="1" value="${remitoItemUnitPrice(item)}" data-idx="${idx}" class="dash-qty remito-unit-input" />
+            </label>
+            <label class="remito-field">
+              <span>% Desc.</span>
+              <input type="number" step="1" value="${remitoItemDiscountPct(item)}" data-idx="${idx}" class="dash-qty remito-disc-input" />
+            </label>
+            <div class="remito-field remito-field-total">
+              <span>Precio final</span>
+              <strong>${fmt.format(remitoItemLineTotal(item))}</strong>
+            </div>
+            <div class="remito-field remito-field-actions">
+              <button type="button" class="btn remito-remove-btn" data-rm="${idx}" aria-label="Quitar" title="Quitar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 6h18"/>
+                  <path d="M8 6V4h8v2"/>
+                  <path d="M19 6l-1 14H6L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </td>`;
       body.appendChild(tr);
     });
   }

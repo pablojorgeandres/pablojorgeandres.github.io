@@ -256,6 +256,18 @@
   cursor: pointer;
 }
 
+.dash-client-name {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: rgba(160, 173, 89, 0.16);
+  border: 1px solid rgba(160, 173, 89, 0.4);
+  color: #5d6a2e;
+  font-size: 1rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
 .dash-detail-card {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -318,7 +330,7 @@
 
 .dash-remito-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   gap: 16px;
 }
 
@@ -376,7 +388,7 @@
 }
 
 .remito-unit-input {
-  width: 96px;
+  width: 110px;
 }
 
 .remito-disc-input {
@@ -400,7 +412,7 @@
 .remito-item-name {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: 5px;
   background: rgba(160, 173, 89, 0.16);
   border: 1px solid rgba(160, 173, 89, 0.4);
   color: #5d6a2e;
@@ -411,6 +423,95 @@
 .remito-item-name .muted {
   color: inherit;
   opacity: 0.72;
+}
+
+#remitoItemsTable thead {
+  display: none;
+}
+
+#remitoItemsTable .remito-item-cell {
+  padding: 10px 5px;
+  border-bottom: none;
+  vertical-align: top;
+}
+
+#remitoItemsTable .remito-item-row + .remito-item-row .remito-item-cell {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 14px;
+}
+
+.remito-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.remito-item-head .remito-item-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 56px);
+}
+
+.remito-item-head .remito-item-code {
+  flex: none;
+}
+
+.remito-item-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+
+.remito-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.remito-field > span {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.remito-field-total {
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+.remito-field-total strong {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+.remito-field-actions {
+  justify-content: flex-end;
+}
+
+.remito-field-actions .btn {
+  min-height: 42px;
+}
+
+.remito-remove-btn {
+  flex: none;
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remito-remove-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .dash-totals-box {
@@ -796,32 +897,68 @@
     min-height: 44px;
   }
 
+  #remitoItemsTable .remito-item-cell {
+    display: block;
+    padding: 0 5px;
+  }
+
+  #remitoItemsTable .remito-item-cell::before {
+    content: none;
+  }
+
+  #remitoItemsTable .remito-item-head {
+    margin-bottom: 8px;
+  }
+
+  #remitoItemsTable .remito-item-head .remito-item-name {
+    font-size: 1.08rem;
+    max-width: calc(100% - 72px);
+  }
+
+  #remitoItemsTable .remito-item-fields {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  #remitoItemsTable .remito-field {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  #remitoItemsTable .remito-field-total,
+  #remitoItemsTable .remito-field-actions {
+    margin-left: 0;
+    align-items: center;
+  }
+
+  #remitoItemsTable .remito-field-total strong {
+    min-height: 0;
+  }
+
+  #remitoItemsTable .remito-field-actions {
+    border-bottom: none;
+    padding-top: 10px;
+    justify-content: flex-end;
+  }
+
+  #remitoItemsTable .remito-field-actions .btn {
+    width: 42px;
+    min-height: 44px;
+  }
+
   #remitoItemsTable .dash-qty,
   #remitoItemsTable .remito-unit-input,
   #remitoItemsTable .remito-disc-input {
     width: min(168px, 58%);
-    min-height: 56px;
+    min-height: 50px;
     font-size: 18px;
     text-align: center;
     padding: 12px 10px;
-  }
-
-  #remitoItemsTable td[data-label="Producto"] {
-    display: block;
-    text-align: right;
-    padding-top: 2px;
-    padding-bottom: 10px;
-  }
-
-  #remitoItemsTable td[data-label="Producto"]::before {
-    content: none;
-  }
-
-  #remitoItemsTable td[data-label="Producto"] .remito-item-name {
-    display: inline-block;
-    text-align: right;
-    font-size: 1.08rem;
-    max-width: 100%;
   }
 
   .dash-detail-card {

@@ -125,7 +125,7 @@ function buildRemitoWhatsAppURL({
     '',
     'Una vez realizada la transferencia no te olvides de enviarnos el comprobante =)',
     '',
-    '-si surge alguna diferencia en el total por falta de stock y el pago ya se realizo, la difencia  a tu favor se abonara mediante transferencia dentro de las 72hs posteriores a la entreg del pedido-',
+    '-si surge alguna diferencia en el total por falta de stock y el pago ya se realizó, la difencia  a tu favor se abonara mediante transferencia dentro de las 72hs posteriores a la entreg del pedido-',
     '',
     '',
     'Grazie =)'
