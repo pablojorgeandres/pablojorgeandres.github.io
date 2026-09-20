@@ -39,24 +39,20 @@ function withCacheBust(url, v) {
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxMNPTt_eiSoS9LIf-gbukhev0lMFdCmNGkJlWoBL0bhkwYlwpm76Df9hRM8DRQF932aw/exec';
 
-/** Zonas de entrega por lugar (pickup + Z1–Z3). */
+/** Entrega por lugar (retiro o domicilio). */
 const PLACE_ZONE_CONFIG = {
   santafe: {
-    mapImage: 'imgs/zonas_sf.jpg',
+    mapImage: null,
     options: [
       { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000 para ZONA 1' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000 para ZONA 2' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000 para ZONA 3' }
+      { id: 'delivery', label: 'Entrega a domicilio', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' }
     ]
   },
   buenosaires: {
     mapImage: null,
     options: [
       { id: 'pickup', label: 'Lo busco!', baseShip: 0, freeMin: null, popup: null },
-      { id: 'z1', label: 'Zona 1', baseShip: 1000, freeMin: 30000, popup: 'Envío gratis a partir de $30000' },
-      { id: 'z2', label: 'Zona 2', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' },
-      { id: 'z3', label: 'Zona 3', baseShip: 1000, freeMin: 50000, popup: 'Envío gratis a partir de $50000' }
+      { id: 'delivery', label: 'Entrega a domicilio', baseShip: 1000, freeMin: 40000, popup: 'Envío gratis a partir de $40000' }
     ]
   }
 };

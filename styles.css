@@ -231,7 +231,7 @@ select{width:100%}
 .remove{background:transparent; color:#fda4af; border:none; cursor:pointer}
 
 /* Aviso colapsable "Importante!" (primer ítem del carrito) */
-.line.cart-important{display:flex; flex-direction:column; align-items:stretch; gap:0; grid-template-columns:unset}
+.line.cart-important{display:flex; flex-direction:column; align-items:stretch; gap:0; grid-template-columns:unset; background:#fff7f4; border-color:rgba(198,40,40,.2)}
 .cart-important-head{display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; margin:0; padding:0; border:none; background:transparent; font:inherit; cursor:pointer; text-align:left}
 .cart-important-title{display:flex; align-items:center; gap:6px; font-weight:700; font-size:15px; color:#c62828}
 .cart-important-warn{font-size:1.15em; line-height:1; flex-shrink:0; font-style:normal}
@@ -262,9 +262,12 @@ select{width:100%}
 .cart-important-freeze > p:last-child{margin-bottom:0}
 .cart-important-freeze .cart-important-row{margin:6px 0}
 .cart-important-freeze .cart-important-row:first-of-type{margin-top:2px}
-.cart-important-accept{margin-top:12px; padding-top:10px; border-top:1px solid rgba(0,0,0,.08); text-align:right}
-.cart-important-accept-label{display:inline-flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text); user-select:none}
-.cart-important-accept-cb{width:18px; height:18px; flex-shrink:0; accent-color:var(--accent); cursor:pointer}
+.cart-important-accept{margin-top:12px; padding:10px 12px; border-top:none; text-align:left; background:rgba(198,40,40,.07); border:1px solid rgba(198,40,40,.28); border-radius:10px}
+.cart-important-accept:has(.cart-important-accept-cb:checked){background:rgba(160,173,89,.14); border-color:rgba(160,173,89,.42)}
+.cart-important-accept-label{display:inline-flex; align-items:center; gap:10px; cursor:pointer; font-size:14px; font-weight:700; color:#c62828; user-select:none}
+.cart-important-accept:has(.cart-important-accept-cb:checked) .cart-important-accept-label{color:#5d6a2e}
+.cart-important-accept-cb{width:22px; height:22px; flex-shrink:0; accent-color:#c62828; cursor:pointer}
+.cart-important-accept:has(.cart-important-accept-cb:checked) .cart-important-accept-cb{accent-color:var(--accent)}
 .cart-important-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0}
 .cart-important-row code{flex:1; min-width:0; font-family:ui-monospace,monospace; font-size:12px; background:rgba(0,0,0,.05); padding:4px 8px; border-radius:8px; word-break:break-all}
 .cart-important-copy{flex-shrink:0; display:inline-grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid rgba(0,0,0,.1); border-radius:8px; background:var(--bg); cursor:pointer; color:var(--text)}

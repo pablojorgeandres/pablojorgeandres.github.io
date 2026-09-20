@@ -6,7 +6,7 @@
   <title>Nimú - Consumo con sentido</title>
   <meta name="description" content="Catálogo simple con carrito y pedido por WhatsApp. HTML, CSS y JS puros." />
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
-  <link rel="stylesheet" href="styles.css?v=26">
+  <link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
   <header>
@@ -144,7 +144,7 @@
     </div>
   </dialog>
 
-<script src="js/config.js?v=18"></script>
+<script src="js/config.js?v=19"></script>
 <script src="js/catalog.js?v=18"></script>
 <script src="js/orders-api.js?v=18"></script>
 <script src="js/whatsapp.js?v=19"></script>
@@ -1007,8 +1007,8 @@ function buildImportantNoticeEl(){
       <p class="cart-important-legal">¡No se aceptan reclamos por mercadería una vez transcurrida una semana desde la entrega!</p>
       <div class="cart-important-accept">
         <label class="cart-important-accept-label">
-          <span>Acepto</span>
           <input type="checkbox" class="cart-important-accept-cb" ${accepted ? 'checked' : ''} />
+          <span>Acepto</span>
         </label>
       </div>
     </div>`;
