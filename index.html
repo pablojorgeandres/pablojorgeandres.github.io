@@ -145,9 +145,9 @@
   </dialog>
 
 <script src="js/config.js?v=19"></script>
-<script src="js/catalog.js?v=18"></script>
+<script src="js/catalog.js?v=20"></script>
 <script src="js/orders-api.js?v=18"></script>
-<script src="js/whatsapp.js?v=19"></script>
+<script src="js/whatsapp.js?v=20"></script>
 <script src="js/slider.js?v=18"></script>
 <script>
 /************ UTIL ************/
@@ -429,6 +429,82 @@ async function performGlobalSearch(query) {
   }
 }
 
+function variantBoxSize(v){
+  const n = parseInt(v && v.boxSize, 10);
+  return Number.isFinite(n) && n > 1 ? n : 1;
+}
+
+function snapQtyToBox(qty, boxSize){
+  const step = variantBoxSize({ boxSize });
+  const n = Math.round(Number(qty));
+  if(!Number.isFinite(n) || n < step) return step;
+  return Math.ceil(n / step) * step;
+}
+
+function boxesFromQty(qty, boxSize){
+  const step = variantBoxSize({ boxSize });
+  return step > 1 ? Math.round((Number(qty) || 0) / step) : 0;
+}
+
+function boxHintText(boxSize){
+  const step = variantBoxSize({ boxSize });
+  if(step <= 1) return '';
+  return `Caja de ${step} unidades · precio por unidad`;
+}
+
+function bindProductQtyControls(content, product){
+  const sel = content.querySelector('[data-sel]');
+  const qty = content.querySelector('[data-qty]');
+  const hint = content.querySelector('[data-box-hint]');
+  const selectedVariant = () => (product.variants || [])[Number(sel && sel.value || 0)] || (product.variants || [])[0];
+
+  const syncQtyUi = (resetValue) => {
+    const step = variantBoxSize(selectedVariant());
+    qty.min = String(step);
+    qty.step = String(step);
+    qty.value = String(resetValue ? step : snapQtyToBox(qty.value, step));
+    if(hint) hint.textContent = boxHintText(step);
+  };
+
+  syncQtyUi(true);
+  if(sel) sel.onchange = () => syncQtyUi(true);
+  content.querySelector('[data-minus]').onclick = () => {
+    const step = variantBoxSize(selectedVariant());
+    qty.value = String(Math.max(step, snapQtyToBox(qty.value, step) - step));
+  };
+  content.querySelector('[data-plus]').onclick = () => {
+    const step = variantBoxSize(selectedVariant());
+    qty.value = String(snapQtyToBox(qty.value, step) + step);
+  };
+  qty.addEventListener('change', () => {
+    qty.value = String(snapQtyToBox(qty.value, variantBoxSize(selectedVariant())));
+  });
+  content.querySelector('[data-add]').onclick = () => {
+    const variantIndex = Number(sel && sel.value || 0);
+    const step = variantBoxSize(selectedVariant());
+    addToCart(product, variantIndex, snapQtyToBox(qty.value, step));
+  };
+}
+
+function productCardMarkup(p){
+  return `
+    <h3 class="title">${p.name}</h3>
+    <div class="desc">${p.description||''}</div>
+    <div class="muted" style="margin:6px 0 8px">${p.category||''}</div>
+    <div class="row-s" style="margin-bottom:8px; gap:8px">
+      <select aria-label="Presentación" data-sel>
+        ${(p.variants||[]).map((v,i)=>`<option value="${i}">${v.label} — ${fmt.format(+v.price||0)}</option>`).join('')}
+      </select>
+    </div>
+    <p class="muted box-qty-hint" data-box-hint></p>
+    <div class="actions">
+      <button class="btn" data-minus>-</button>
+      <input type="number" min="1" value="1" style="width:70px; text-align:center" data-qty />
+      <button class="btn" data-plus>+</button>
+      <button class="btn primary" data-add>Agregar</button>
+    </div>`;
+}
+
 function buildProductCard(p) {
   const card = document.createElement('div');
   card.className = 'card';
@@ -441,29 +517,8 @@ function buildProductCard(p) {
 
   const content = document.createElement('div');
   content.className = 'content';
-  content.innerHTML = `
-    <h3 class="title">${p.name}</h3>
-    <div class="desc">${p.description||''}</div>
-    <div class="muted" style="margin:6px 0 8px">${p.category||''}</div>
-    <div class="row-s" style="margin-bottom:8px; gap:8px">
-      <select aria-label="Presentación" data-sel>
-        ${(p.variants||[]).map((v,i)=>`<option value="${i}">${v.label} — ${fmt.format(+v.price||0)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="actions">
-      <button class="btn" data-minus>-</button>
-      <input type="number" min="1" value="1" style="width:70px; text-align:center" data-qty />
-      <button class="btn" data-plus>+</button>
-      <button class="btn primary" data-add>Agregar</button>
-    </div>`;
-
-  const qty = content.querySelector('[data-qty]');
-  content.querySelector('[data-minus]').onclick = ()=> qty.value = Math.max(1, Number(qty.value)-1);
-  content.querySelector('[data-plus]').onclick = ()=> qty.value = Number(qty.value)+1;
-  content.querySelector('[data-add]').onclick = ()=>{
-    const variantIndex = Number(content.querySelector('[data-sel]').value || 0);
-    addToCart(p, variantIndex, Number(qty.value||1));
-  };
+  content.innerHTML = productCardMarkup(p);
+  bindProductQtyControls(content, p);
 
   card.appendChild(thumb);
   card.appendChild(content);
@@ -668,29 +723,8 @@ function renderGrid(){
 
     const content = document.createElement('div');
     content.className = 'content';
-    content.innerHTML = `
-      <h3 class="title">${p.name}</h3>
-      <div class="desc">${p.description||''}</div>
-      <div class="muted" style="margin:6px 0 8px">${p.category||''}</div>
-      <div class="row-s" style="margin-bottom:8px; gap:8px">
-        <select aria-label="Presentación" data-sel>
-          ${(p.variants||[]).map((v,i)=>`<option value="${i}">${v.label} — ${fmt.format(+v.price||0)}</option>`).join('')}
-        </select>
-      </div>
-      <div class="actions">
-        <button class="btn" data-minus>-</button>
-        <input type="number" min="1" value="1" style="width:70px; text-align:center" data-qty />
-        <button class="btn" data-plus>+</button>
-        <button class="btn primary" data-add>Agregar</button>
-      </div>`;
-
-    const qty = content.querySelector('[data-qty]');
-    content.querySelector('[data-minus]').onclick = ()=> qty.value = Math.max(1, Number(qty.value)-1);
-    content.querySelector('[data-plus]').onclick = ()=> qty.value = Number(qty.value)+1;
-    content.querySelector('[data-add]').onclick = ()=>{
-      const variantIndex = Number(content.querySelector('[data-sel]').value || 0);
-      addToCart(p, variantIndex, Number(qty.value||1));
-    };
+    content.innerHTML = productCardMarkup(p);
+    bindProductQtyControls(content, p);
 
     card.appendChild(thumb);
     card.appendChild(content);
@@ -1046,15 +1080,20 @@ function buildImportantNoticeEl(){
 function addToCart(product, variantIndex, quantity=1){
   const v = (product.variants||[])[variantIndex] || (product.variants||[])[0];
   if(!v) return;
+  const boxSize = variantBoxSize(v);
+  const qty = snapQtyToBox(quantity, boxSize);
   const key = `${product.id}__${v.sku || v.label}`;
   const existing = state.cart.find(i=>i.key===key);
-  if(existing){ existing.qty += quantity; }
-  else {
+  if(existing){
+    const step = variantBoxSize(existing);
+    existing.boxSize = step;
+    existing.qty = snapQtyToBox(existing.qty + qty, step);
+  } else {
     // Incluimos el código de variante si existiera (tu JSON lo trae como "cod" -> acá uso "code")
     const possibleCode = v.code ?? v.cod ?? v.sku ?? null;
     state.cart.push({
       key, productId:product.id, name:product.name,
-      code:possibleCode, variant:v.label, price:+v.price||0, qty:quantity
+      code:possibleCode, variant:v.label, price:+v.price||0, qty, boxSize
     });
   }
   saveCart(); renderCart();
@@ -1062,8 +1101,10 @@ function addToCart(product, variantIndex, quantity=1){
 
 function changeQty(key, delta){
   const item = state.cart.find(i=>i.key===key); if(!item) return;
-  item.qty += delta;
-  if(item.qty <= 0){ state.cart = state.cart.filter(i=>i.key!==key); }
+  const step = variantBoxSize(item);
+  item.boxSize = step;
+  item.qty += delta * step;
+  if(item.qty < step){ state.cart = state.cart.filter(i=>i.key!==key); }
   clearImportantAcceptIfCartEmpty();
   saveCart(); renderCart();
 }
@@ -1163,7 +1204,7 @@ function renderCart(){
       line.innerHTML = `
         <div>
           <div style="font-weight:700">${i.name} <span class="muted">(${i.variant})</span></div>
-          <div class="muted">${fmt.format(i.price)} c/u</div>
+          <div class="muted">${fmt.format(i.price)} c/u${variantBoxSize(i) > 1 ? ` · ${i.qty} unidades (${boxesFromQty(i.qty, i.boxSize)} caja${boxesFromQty(i.qty, i.boxSize) === 1 ? '' : 's'})` : ''}</div>
           <button class="remove" aria-label="Quitar">Quitar</button>
         </div>
         <div class="qty">
@@ -1239,6 +1280,8 @@ async function sendOrderToSheet(){
       name: i.name,
       variant: i.variant,
       qty: i.qty,
+      boxSize: variantBoxSize(i),
+      boxes: boxesFromQty(i.qty, i.boxSize) || i.qty,
       price: i.price,
       listPrice: i.price,
       unitPrice: i.price,

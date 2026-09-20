@@ -21,7 +21,12 @@ function normalizeWaPhone(phone) {
 function formatOrderItemLine(item) {
   const variant = item.variant ? ` (${item.variant})` : '';
   const lineTotal = (item.price || 0) * (item.qty || 0);
-  return `• ${item.name}${variant} x${item.qty} — ${fmt.format(lineTotal)}`;
+  const boxSize = Number(item.boxSize);
+  const boxes = boxSize > 1 ? Math.round((item.qty || 0) / boxSize) : 0;
+  const qtyLabel = boxes > 0
+    ? `x${item.qty} (${boxes} caja${boxes === 1 ? '' : 's'})`
+    : `x${item.qty}`;
+  return `• ${item.name}${variant} ${qtyLabel} — ${fmt.format(lineTotal)}`;
 }
 
 function remitoItemListAmount(item) {

@@ -65,9 +65,10 @@ Dashboard → GET ORDERS_URL?action=clients|orders
 ### Sheet schema
 
 - Tabs = categories; tabs starting with `_` ignored.
-- Columns: `id`, `name`, `imageUrl`, `description`, `variants`
+- Required columns: `id`, `name`, `imageUrl`, `description`, `variants`
+- Optional column `boxSize` (integer units per box). Empty/`1` = sale by unit; `N > 1` = stepper/min qty of N, price still per unit.
 - Cover row: `id=_cover` or `name=categoryimage` (not a product)
-- `variants`: JSON array `[{label, price, code}]`
+- `variants`: JSON array `[{label, price, code, boxSize?}]`. `boxSize` is copied from the optional sheet column when `N > 1`.
 
 ### Places / spreadsheet IDs
 
@@ -126,7 +127,7 @@ Source in repo is **not** auto-deployed. Edit in Google, keep `resources/` in sy
 
 Server cache: `CacheService`, **TTL 300s**.
 
-Keys: `categories_v1_{place}`, `products_v1_{place}_{category}`, `search_v1_{place}_{q}`, `catalog_v3_{place}_g`.
+Keys: `categories_v1_{place}`, `products_v2_{place}_{category}`, `search_v2_{place}_{q}`, `catalog_v3_{place}_g`.
 
 `doPost`:
 - **Slider editor:** form field `sliderData` (`op`: `upsert` | `meta` | `remove`) → GitHub PUT/DELETE + update `data/{place}/slider.json`; responde HTML + `postMessage` (`source: nimu-slider`).
@@ -178,7 +179,7 @@ Also exposes helpers used by the slider editor: `commitBase64File_`, `deleteFile
 | Key | Content |
 |-----|---------|
 | `categories_v2__{placeId}` | categories object |
-| `products_v2__{placeId}__{category}` | product array |
+| `products_v3__{placeId}__{category}` | product array |
 
 `clearCatalogCache()` / storefront `clearCache()` removes keys starting with `categories_`, `products_`, `catalog_`.
 
@@ -221,6 +222,6 @@ state = { place, clients, selectedClient, remitoCart, sliderSlides, … }
 4. Category tab names are case-sensitive; slug is filename only.
 5. WhatsApp is primary; sheet save is best-effort (`console.warn` on fail).
 6. No service worker / PWA despite older README claims.
-7. Bump cache key version (`v2` → `v3`) to force clients to refetch after breaking catalog changes.
+7. Bump cache key version (`products_v2` → `products_v3`) to force clients to refetch after breaking catalog changes.
 8. Dashboard clients/orders need a **redeploy** of the pedidos Web App after updating `appscript-pedidos.js`.
 9. Dashboard slider uploads need a **redeploy** of the **pedidos** Web App after updating `appscript-pedidos.js`, plus `GITHUB_TOKEN` (and optional `GITHUB_REPO` / `GITHUB_BRANCH`) in that project’s Script Properties.

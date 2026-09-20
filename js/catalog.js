@@ -134,7 +134,7 @@ async function fetchSliderDataFromApi(placeId) {
 }
 
 async function fetchProductsData(placeId, category, categoriesData) {
-  const cacheKey = `products_v2__${placeId}__${category}`;
+  const cacheKey = `products_v3__${placeId}__${category}`;
   const cached = getCacheWithExpiry(cacheKey);
   if (cached) return cached;
 
@@ -170,6 +170,7 @@ async function buildProductCodeIndex(placeId) {
               name: p.name,
               variant: v.label || '',
               price: +v.price || 0,
+              boxSize: +v.boxSize > 1 ? +v.boxSize : 1,
               category: cat
             };
             byCode.set(code.toUpperCase(), entry);

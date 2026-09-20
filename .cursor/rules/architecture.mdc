@@ -49,8 +49,8 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 
 | Layer | Where | TTL | Keys |
 |-------|-------|-----|------|
-| Client | `localStorage` | 24h | `categories_v2__{place}`, `products_v2__{place}__{category}` |
-| Server | `CacheService` | 300s | `categories_v1_*`, `products_v1_*`, `search_v1_*` |
+| Client | `localStorage` | 24h | `categories_v2__{place}`, `products_v3__{place}__{category}` |
+| Server | `CacheService` | 300s | `categories_v1_*`, `products_v2_*`, `search_v2_*` |
 | Orders read | `CacheService` | ~90s | `clients_v1_*`, `orders_v1_*` |
 | Static | GitHub `data/` | ~15min publish | places / categories / products JSON |
 

@@ -2,6 +2,8 @@
 const TTL_SECONDS = 300; // cache del catálogo (5 min)
 const IGNORED_PREFIX = "_"; // pestañas que comienzan con "_" se omiten
 const HEADERS = ["id","name","imageUrl","description","variants"];
+const BOX_SIZE_HEADER = "boxSize";
+const BOX_SIZE_SEED = { Y29: 30, Y30: 30, Y31: 30 };
 
 /**
  * Mapeo de lugares -> Spreadsheet IDs
@@ -33,20 +35,46 @@ function parseVariants_(val) {
   } catch(e) { return []; }
 }
 
+function parseBoxSize_(val) {
+  const n = parseInt(String(val == null ? "" : val).trim(), 10);
+  return n > 1 ? n : 0;
+}
+
+function applyBoxSize_(vars, boxSize) {
+  if (!boxSize || !vars || !vars.length) return vars;
+  return vars.map(function(v) {
+    if (!v || typeof v !== "object") return v;
+    const out = {};
+    Object.keys(v).forEach(function(k) { out[k] = v[k]; });
+    out.boxSize = boxSize;
+    return out;
+  });
+}
+
+function headerIndex_(hdrs, name) {
+  const needle = String(name || "").trim().toLowerCase();
+  for (let i = 0; i < hdrs.length; i++) {
+    if (String(hdrs[i] || "").trim().toLowerCase() === needle) return i;
+  }
+  return -1;
+}
+
 /** Lectura rápida de una pestaña **/
 function readSheetFast_(sh){
   const name = sh.getName();
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return { category: name, cover: "", items: [] };
 
-  const rng = sh.getRange(1, 1, lastRow, 5);
+  const lastCol = Math.max(sh.getLastColumn(), 5);
+  const rng = sh.getRange(1, 1, lastRow, lastCol);
   const values = rng.getValues();
   const hdrs = values[0];
 
   const idx = {};
-  HEADERS.forEach(h => idx[h] = hdrs.indexOf(h));
+  HEADERS.forEach(h => idx[h] = headerIndex_(hdrs, h));
   const ok = HEADERS.every(h => idx[h] >= 0);
   if (!ok) return { category: name, cover: "", items: [] };
+  const boxIdx = headerIndex_(hdrs, BOX_SIZE_HEADER);
 
   let cover = "";
   const items = [];
@@ -57,7 +85,8 @@ function readSheetFast_(sh){
     const nm    = String(r[idx.name]||"").trim();
     const img   = toThumb_(r[idx.imageUrl]||"", 800);
     const desc  = String(r[idx.description]||"").trim();
-    const vars  = parseVariants_(r[idx.variants]);
+    const boxSize = boxIdx >= 0 ? parseBoxSize_(r[boxIdx]) : 0;
+    const vars  = applyBoxSize_(parseVariants_(r[idx.variants]), boxSize);
 
     // Detectar fila especial de portada y extraer cover pero NO agregarla como producto
     const isSpecialCover = (
@@ -238,7 +267,7 @@ function doGet(e){
   // 3) Nueva acción: productos de una categoría específica
   if (action === "products" && category && placeId) {
     console.log(`DEBUG: Ejecutando products para ${place.id} - ${category}`);
-    const key = `products_v1_${place.id}_${category}`;
+    const key = `products_v2_${place.id}_${category}`;
     const cache = CacheService.getScriptCache();
     const hit = cache.get(key);
     if (hit) return jsonOut_(JSON.parse(hit));
@@ -256,7 +285,7 @@ function doGet(e){
     }
     
     console.log(`DEBUG: Ejecutando search para ${place.id} - "${searchTerm}"`);
-    const key = `search_v1_${place.id}_${searchTerm.toLowerCase()}`;
+    const key = `search_v2_${place.id}_${searchTerm.toLowerCase()}`;
     const cache = CacheService.getScriptCache();
     const hit = cache.get(key);
     if (hit) {
@@ -270,7 +299,17 @@ function doGet(e){
     return jsonOut_(data);
   }
 
-  // 5) Slider manifesto (lee desde GitHub)
+  // 5) Una vez: agregar columna boxSize y sembrar Y29/Y30/Y31
+  if (action === "ensureboxsize") {
+    return jsonOut_(ensureBoxSizeHeaders());
+  }
+
+  if (action === "publishcatalog") {
+    publishCatalog();
+    return jsonOut_({ success: true, message: "publishCatalog() ejecutado" });
+  }
+
+  // 6) Slider manifesto (lee desde GitHub)
   if (action === "slider" && placeId) {
     try {
       return jsonOut_(readSliderManifest_(place.id));
@@ -298,7 +337,7 @@ function doGet(e){
   // Devolver error para endpoints mal formados
   return jsonOut_({
     error: "Endpoint no reconocido",
-    validActions: ["categories", "products", "places", "search", "slider"],
+    validActions: ["categories", "products", "places", "search", "slider", "ensureboxsize", "publishcatalog"],
     examples: [
       "?action=categories&place=santafe",
       "?action=products&place=santafe&category=Frutos Secos",
@@ -306,6 +345,46 @@ function doGet(e){
       "?action=slider&place=santafe"
     ]
   });
+}
+
+/**
+ * Agrega header boxSize (columna opcional) a cada pestaña de categoría
+ * y carga 30 en Y29/Y30/Y31. No toca HEADERS oficiales.
+ */
+function ensureBoxSizeOnSheet_(sh, placeId) {
+  const lastRow = Math.max(sh.getLastRow(), 1);
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  let boxCol = headerIndex_(headers, BOX_SIZE_HEADER) + 1;
+  if (boxCol < 1) {
+    boxCol = lastCol + 1;
+    sh.getRange(1, boxCol).setValue(BOX_SIZE_HEADER);
+  }
+
+  const seeded = [];
+  if (lastRow >= 2) {
+    const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      const id = String(ids[i][0] || "").trim().toUpperCase();
+      const size = BOX_SIZE_SEED[id];
+      if (!size) continue;
+      sh.getRange(i + 2, boxCol).setValue(size);
+      seeded.push({ id: id, row: i + 2, boxSize: size });
+    }
+  }
+  return { place: placeId, sheet: sh.getName(), boxCol: boxCol, seeded: seeded };
+}
+
+function ensureBoxSizeHeaders() {
+  const results = [];
+  PLACES.forEach(function(place) {
+    const ss = SpreadsheetApp.openById(place.sheetId);
+    ss.getSheets().forEach(function(sh) {
+      if (sh.getName().startsWith(IGNORED_PREFIX)) return;
+      results.push(ensureBoxSizeOnSheet_(sh, place.id));
+    });
+  });
+  return { success: true, results: results };
 }
 
 /**

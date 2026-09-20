@@ -206,6 +206,8 @@ main{padding:20px 16px 120px}
 select, button, input[type="number"], textarea{background:var(--panel); color:var(--text); border:1px solid rgba(0,0,0,.12); border-radius:12px; padding:10px 12px}
 select{width:100%}
 .price{font-weight:800}
+.box-qty-hint{min-height:1.2em; margin:0 0 4px}
+.box-qty-hint:empty{display:none}
 .actions{display:flex; gap:8px; margin-top:auto; padding-top:12px}
 .btn{flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,.12); background:var(--panel); color:var(--text); cursor:pointer}
 .btn.primary{background:linear-gradient(135deg,var(--accent),#7a8a4a); color:var(--bg); font-weight:800; border:none}
