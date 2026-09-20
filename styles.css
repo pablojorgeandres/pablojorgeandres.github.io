@@ -182,9 +182,9 @@ header{
 .brand i{width:31px; height:31px; border-radius:50%; display:inline-grid; place-items:center; background:white; box-shadow: var(--shadow); overflow:hidden;}
 .brand-icon{width:24px; height:24px; object-fit:cover; border-radius:50%;}
 
-.search{flex:1; min-width:220px; display:flex; gap:8px}
+.search{flex:1 1 160px; min-width:0; display:flex; gap:8px}
 .search.hidden{display:none}
-.search input{flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(0,0,0,.12); background:var(--bg); color:var(--text)}
+.search input{flex:1; min-width:0; width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(0,0,0,.12); background:var(--bg); color:var(--text)}
 .search input::placeholder{color:var(--muted)}
 
 .pillbar{display:flex; gap:8px; overflow:auto; scrollbar-width:none; padding:8px 0 4px}
@@ -216,11 +216,13 @@ select{width:100%}
 /* Floating cart button */
 .fab{
   display:flex; align-items:center; gap:10px;
+  flex-shrink:0;
   background:linear-gradient(135deg,var(--accent),#7a8a4a);
   color:var(--bg); border:none; border-radius:999px;
   padding:12px 16px; font-weight:800; box-shadow: var(--shadow);
   cursor:pointer
 }
+.fab.hidden{display:none}
 .badge{background:var(--text); color:var(--bg); padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(0,0,0,.18)}
 
 /* Cart drawer */
@@ -654,7 +656,8 @@ footer a{ color:var(--accent); }
   }
 }
 @media (min-width: 768px){
-  .fab{ position:fixed; right:18px; bottom:18px; z-index:30; }
+  /* Stay in the header row so search can shrink; sticky header makes position:fixed overlay it */
+  .fab{ position:static; flex-shrink:0; }
 }
 
 #closeCartBtn { flex:none; padding:12px 22px; border-radius:30px; }

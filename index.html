@@ -6,7 +6,7 @@
   <title>Nimú - Consumo con sentido</title>
   <meta name="description" content="Catálogo simple con carrito y pedido por WhatsApp. HTML, CSS y JS puros." />
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=31">
 </head>
 <body>
   <header>
@@ -32,7 +32,7 @@
         <div class="search">
           <input id="searchInput" type="search" placeholder="Buscar productos en todas las categorías..." />
         </div>
-        <button class="fab" id="openCartBtn" aria-label="Abrir carrito">🛒 <span class="badge" id="cartCount">0</span></button>
+        <button class="fab hidden" id="openCartBtn" aria-label="Abrir carrito">🛒 <span class="badge" id="cartCount">0</span></button>
       </div>
       <div class="pillbar" id="catBar"></div>
     </div>
@@ -914,12 +914,15 @@ function showView(v){
   $('#searchInput').value = '';
   state.search = '';
   
-  // Mostrar/ocultar buscador según la vista
+  // Mostrar/ocultar buscador y carrito según la vista
   const searchElement = $('.search');
+  const cartBtn = $('#openCartBtn');
   if (v === 'places') {
     searchElement.classList.add('hidden');
+    cartBtn.classList.add('hidden');
   } else {
     searchElement.classList.remove('hidden');
+    cartBtn.classList.remove('hidden');
   }
   
   // Limpiar contenido al cambiar de vista para evitar contenido stale
