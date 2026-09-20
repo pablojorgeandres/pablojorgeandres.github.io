@@ -195,6 +195,7 @@ main{padding:20px 16px 120px}
 
 /* Tarjetas genéricas */
 .grid{max-width:1120px; margin:0 auto; display:grid; grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) ); gap:16px}
+.grid .search-result-count{grid-column:1 / -1; margin:0}
 .card{background:var(--bg); border:1px solid rgba(0,0,0,.08); border-radius:var(--radius); box-shadow: var(--shadow); display:flex; flex-direction:column; overflow:hidden; justify-content:space-between}
 .thumb{aspect-ratio: 4/3; background:var(--panel); display:grid; place-items:center; font-size:46px}
 .thumb.hasimg{background-size:cover; background-position:center; font-size:0}

@@ -24,12 +24,24 @@ function getCacheWithExpiry(key) {
   }
 }
 
+const searchIndexMemory = Object.create(null);
+const searchIndexInflight = Object.create(null);
+const SEARCH_INDEX_CACHE_PREFIX = 'search_index_v1__';
+const SEARCH_RESULT_LIMIT = 60;
+
 function clearCatalogCache() {
   const keys = Object.keys(localStorage);
   const removed = keys.filter(
-    key => key.startsWith('categories_') || key.startsWith('products_') || key.startsWith('catalog_')
+    key =>
+      key.startsWith('categories_') ||
+      key.startsWith('products_') ||
+      key.startsWith('catalog_') ||
+      key.startsWith('search_index_')
   );
   removed.forEach(key => localStorage.removeItem(key));
+  Object.keys(searchIndexMemory).forEach(key => {
+    delete searchIndexMemory[key];
+  });
   return removed.length;
 }
 
@@ -187,8 +199,93 @@ async function buildProductCodeIndex(placeId) {
   return { byCode, list };
 }
 
+function searchIndexCacheKey(placeId) {
+  return `${SEARCH_INDEX_CACHE_PREFIX}${placeId}`;
+}
+
+function githubDataBase() {
+  return typeof REPO_RAW_BASE !== 'undefined'
+    ? `${REPO_RAW_BASE}/data`
+    : 'https://raw.githubusercontent.com/pablojorgeandres/tienda-nimu/main/data';
+}
+
+async function fetchSearchJson(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error('search.json inválido');
+  return data;
+}
+
 /**
- * Search products via catalog Apps Script.
+ * Static search index for a place (memory → localStorage 24h → data/ → GitHub raw).
+ */
+async function fetchSearchIndex(placeId) {
+  if (!placeId) return [];
+  if (searchIndexMemory[placeId]) return searchIndexMemory[placeId];
+  if (searchIndexInflight[placeId]) return searchIndexInflight[placeId];
+
+  const cached = getCacheWithExpiry(searchIndexCacheKey(placeId));
+  if (cached) {
+    searchIndexMemory[placeId] = cached;
+    return cached;
+  }
+
+  searchIndexInflight[placeId] = (async () => {
+    try {
+      let products;
+      try {
+        products = await fetchSearchJson(`${DATA_BASE}/${placeId}/search.json`);
+      } catch (localErr) {
+        const rawBase = githubDataBase();
+        if (String(DATA_BASE).replace(/\/$/, '') === rawBase) throw localErr;
+        products = await fetchSearchJson(`${rawBase}/${placeId}/search.json`);
+      }
+      searchIndexMemory[placeId] = products;
+      setCacheWithExpiry(searchIndexCacheKey(placeId), products);
+      return products;
+    } finally {
+      delete searchIndexInflight[placeId];
+    }
+  })();
+
+  return searchIndexInflight[placeId];
+}
+
+function preloadSearchIndex(placeId) {
+  if (!placeId) return;
+  fetchSearchIndex(placeId).catch(err => {
+    console.warn('Precarga de búsqueda falló', err);
+  });
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function productMatchesSearch(product, queryNorm) {
+  if (!queryNorm) return true;
+  if (normalizeSearchText(product && product.name).includes(queryNorm)) return true;
+  if (normalizeSearchText(product && product.description).includes(queryNorm)) return true;
+  if (normalizeSearchText(product && product.category).includes(queryNorm)) return true;
+  return (product && product.variants ? product.variants : []).some(v => {
+    const code = normalizeSearchText(v && (v.code ?? v.cod ?? v.sku));
+    return code.includes(queryNorm);
+  });
+}
+
+function filterSearchIndex(products, query) {
+  const q = normalizeSearchText(query);
+  if (q.length < 3) return [];
+  return (products || []).filter(p => productMatchesSearch(p, q));
+}
+
+/**
+ * Last-resort search via catalog Apps Script (Sheets). Not used when the index is available.
  */
 async function searchProductsApi(placeId, query) {
   const url = `${APPS_SCRIPT_URL}?action=search&place=${encodeURIComponent(placeId)}&q=${encodeURIComponent(query)}`;

@@ -201,6 +201,29 @@ function readGithubTextFile_(path, gh) {
   return Utilities.newBlob(Utilities.base64Decode(raw)).getDataAsString("UTF-8");
 }
 
+function searchProductKey_(p) {
+  var codes = [];
+  (p && p.variants ? p.variants : []).forEach(function(v) {
+    var code = String((v && (v.code || v.cod || v.sku)) || "").trim().toUpperCase();
+    if (code) codes.push(code);
+  });
+  codes.sort();
+  return String((p && p.id) || "").trim().toUpperCase() + "|" + codes.join(",");
+}
+
+function dedupeSearchProducts_(items) {
+  var seen = {};
+  var out = [];
+  (items || []).forEach(function(p) {
+    if (!p || !p.id) return;
+    var key = searchProductKey_(p);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(p);
+  });
+  return out;
+}
+
 /* ---------- publicador principal ---------- */
 
 function publishCatalog() {
@@ -216,7 +239,7 @@ function publishCatalog() {
   commitFile_("data/places.json", placesJson, gh);
   console.log("✅ places.json");
 
-  // 2. Por cada lugar: categories.json + productos por categoría
+  // 2. Por cada lugar: categories.json + productos por categoría + search.json
   PLACES.forEach(function(place) {
     var ss = SpreadsheetApp.openById(place.sheetId);
     var sheets = ss.getSheets().filter(function(sh) {
@@ -224,6 +247,7 @@ function publishCatalog() {
     });
 
     var categories = {};
+    var searchItems = [];
 
     sheets.forEach(function(sh) {
       var catMeta = readCategoriesOnly_(sh);
@@ -236,6 +260,7 @@ function publishCatalog() {
       };
 
       var block = readSheetFast_(sh);
+      searchItems = searchItems.concat(block.items || []);
       var productsJson = JSON.stringify(block.items);
       commitFile_(
         "data/" + place.id + "/products/" + slug + ".json",
@@ -247,6 +272,10 @@ function publishCatalog() {
     var catsJson = JSON.stringify(categories);
     commitFile_("data/" + place.id + "/categories.json", catsJson, gh);
     console.log("✅ " + place.id + "/categories.json");
+
+    var searchProducts = dedupeSearchProducts_(searchItems);
+    commitFile_("data/" + place.id + "/search.json", JSON.stringify(searchProducts), gh);
+    console.log("✅ " + place.id + "/search.json (" + searchProducts.length + " productos)");
   });
 
   console.log("🎉 Publicación completada");

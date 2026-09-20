@@ -17,7 +17,7 @@ Needs HTTP server locally (`python3 -m http.server 8000`).
 
 ```
 Sheets → publishCatalog() ~1h → GitHub data/*.json → fetch() → UI (+ localStorage 24h)
-Sheets → doGet search → APPS_SCRIPT_URL (CacheService 5min)
+         (incluye data/{place}/search.json → filtro local del buscador)
 Cart → WhatsApp + form POST ORDERS_URL
        → findOrCreateClientCode_ (contacts SF/BA) → orders sheet (+ CodCliente)
 Dashboard → GET ORDERS_URL?action=clients|orders
@@ -28,7 +28,7 @@ Dashboard slider → form POST ORDERS_URL (sliderData) → GitHub imgs/slider + 
 ## Endpoints (`js/config.js`)
 
 - `DATA_BASE = 'data'`
-- `APPS_SCRIPT_URL` — search (`?action=search`)
+- `APPS_SCRIPT_URL` — catalog `doGet` (search is fallback only; home uses `data/{place}/search.json`)
 - `ORDERS_URL` — order POST + dashboard GET (`clients`/`orders`/`slider`) + slider write (`sliderData`)
 
 Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS_URL` only. Slider read/write also uses `ORDERS_URL`.
@@ -38,7 +38,7 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 | File | Role |
 |------|------|
 | `js/config.js` | STORE, URLs, zones, `fmt` |
-| `js/catalog.js` | categories/products/slider fetch, cache, code index |
+| `js/catalog.js` | categories/products/slider/search-index fetch, cache, code index |
 | `js/orders-api.js` | `postOrderToSheet`, `fetchOrdersApi` |
 | `js/slider-api.js` | `postSliderToSheet`, image compress |
 | `js/slider.js` | storefront place carousel |
@@ -49,12 +49,12 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 
 | Layer | Where | TTL | Keys |
 |-------|-------|-----|------|
-| Client | `localStorage` | 24h | `categories_v2__{place}`, `products_v3__{place}__{category}` |
+| Client | `localStorage` | 24h | `categories_v2__{place}`, `products_v3__{place}__{category}`, `search_index_v1__{place}` |
 | Server | `CacheService` | 300s | `categories_v1_*`, `products_v2_*`, `search_v2_*` |
 | Orders read | `CacheService` | ~90s | `clients_v1_*`, `orders_v1_*` |
-| Static | GitHub `data/` | ~15min publish | places / categories / products JSON |
+| Static | GitHub `data/` | ~15min publish | places / categories / products / search JSON |
 
-- `clearCache()` / `clearCatalogCache()` clears catalog LS keys. Search is not client-cached.
+- `clearCache()` / `clearCatalogCache()` clears catalog LS keys including `search_index_*`.
 - Stale UI after publish: wait 24h, call `clearCache()`, or bump key version.
 
 ## Scripts (`resources/`)
@@ -62,7 +62,7 @@ Do **not** use catalog `appscript.js` `doPost` for orders; frontend uses `ORDERS
 | File | Role |
 |------|------|
 | `appscript.js` | Catalog API `doGet` + server cache; legacy `doPost` |
-| `appscript-publish.js` | `publishCatalog()` → GitHub; binary commit/delete helpers |
+| `appscript-publish.js` | `publishCatalog()` → GitHub (incluye `search.json`); binary commit/delete helpers |
 | `appscript-pedidos.js` | Orders writer + `doGet` clients/orders/slider; slider GitHub write |
 
 Places: `santafe`, `buenosaires` (sheet IDs in `appscript.js` `PLACES`).
