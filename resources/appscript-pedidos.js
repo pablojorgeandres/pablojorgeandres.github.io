@@ -3,6 +3,9 @@
  * Este script debe ser copiado en el editor de Apps Script del spreadsheet de pedidos
  * URL del spreadsheet: https://docs.google.com/spreadsheets/d/1-926t3YP4ZEf1xWyGA-IlsDm3JmxNn5eJRd-JayRafs/edit
  *
+ * Contactos (A–G): código, localidad, nombre, teléfono, CUIL, DNI, APODO.
+ * Al crear cliente, G = customer.nickname / apodo, o el primer nombre.
+ *
  * Al guardar un pedido:
  *  1. Busca o crea el cliente en el sheet de contactos (CodCliente S# / B#)
  *     — o usa customer.clientCode si viene del dashboard
@@ -43,6 +46,9 @@ const CONTACT_SHEETS = {
   santafe: { tab: "DB CONTACTS SF", prefix: "S" },
   buenosaires: { tab: "DB CONTACTS BA", prefix: "B" }
 };
+
+const CONTACT_COLS = 7;
+const CONTACT_HEADERS = ["", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI", "APODO"];
 
 const ORDER_HEADERS = [
   'Fecha y Hora',
@@ -392,6 +398,19 @@ function normalizeName_(s) {
     .replace(/\s+/g, " ");
 }
 
+/** Primera palabra del nombre, capitalizada ("ANA MONTE VERA" → "Ana"). */
+function firstNameOf_(name) {
+  const first = String(name || "").trim().split(/\s+/)[0] || "";
+  if (!first) return "";
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+function readCustomerNickname_(customer) {
+  if (!customer) return "";
+  const raw = String(customer.nickname || customer.apodo || "").trim();
+  return raw || firstNameOf_(customer.name);
+}
+
 /** Solo dígitos del DNI/documento (checkout / remito). */
 function normalizeDni_(s) {
   return String(s || "").replace(/\D/g, "");
@@ -438,18 +457,18 @@ function cachePutJson_(key, obj) {
 }
 
 /**
- * Asegura headers A–F en contactos (E=CUIL vacío, F=DNI).
+ * Asegura headers A–G en contactos (E=CUIL, F=DNI, G=APODO).
+ * Completa vacíos; no pisa texto existente (ej. link en E1).
  * No toca la fila 1 si ya es un cliente (código S#/B#).
  */
 function ensureContactsHeaders_(sheet) {
-  const headers = sheet.getRange(1, 1, 1, 6).getValues()[0];
+  const headers = sheet.getRange(1, 1, 1, CONTACT_COLS).getValues()[0];
   if (isValidClientCode_(normalizeClientCode_(headers[0]))) return;
 
-  const expected = ["", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"];
   let dirty = false;
-  for (let i = 0; i < 6; i++) {
-    if (!String(headers[i] || "").trim() && expected[i]) {
-      headers[i] = expected[i];
+  for (let i = 0; i < CONTACT_COLS; i++) {
+    if (!String(headers[i] || "").trim() && CONTACT_HEADERS[i]) {
+      headers[i] = CONTACT_HEADERS[i];
       dirty = true;
     }
   }
@@ -457,7 +476,11 @@ function ensureContactsHeaders_(sheet) {
     headers[5] = "DNI";
     dirty = true;
   }
-  if (dirty) sheet.getRange(1, 1, 1, 6).setValues([headers]);
+  if (String(headers[6] || "").trim().toUpperCase() !== "APODO") {
+    headers[6] = "APODO";
+    dirty = true;
+  }
+  if (dirty) sheet.getRange(1, 1, 1, CONTACT_COLS).setValues([headers]);
 }
 
 /**
@@ -476,9 +499,7 @@ function findOrCreateClientCode_(place, customer) {
   let sheet = ss.getSheetByName(cfg.tab);
   if (!sheet) {
     sheet = ss.insertSheet(cfg.tab);
-    sheet.getRange(1, 1, 1, 6).setValues([[
-      "", "LOCALIDAD Y DIRECCION", "NOMBRE", "TELEFONO", "CUIL", "DNI"
-    ]]);
+    sheet.getRange(1, 1, 1, CONTACT_COLS).setValues([CONTACT_HEADERS]);
   } else {
     ensureContactsHeaders_(sheet);
   }
@@ -489,8 +510,8 @@ function findOrCreateClientCode_(place, customer) {
   let maxNum = 0;
 
   if (lastRow >= 1) {
-    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL, F=DNI
-    const values = sheet.getRange(1, 1, lastRow, 6).getValues();
+    // A=código, B=dirección, C=nombre, D=teléfono, E=CUIL, F=DNI, G=APODO
+    const values = sheet.getRange(1, 1, lastRow, CONTACT_COLS).getValues();
 
     for (let i = 0; i < values.length; i++) {
       const code = String(values[i][0] || "").trim();
@@ -526,7 +547,8 @@ function findOrCreateClientCode_(place, customer) {
     }
   }
 
-  // Crear nuevo — CUIL (E) vacío; DNI (F) desde checkout (solo alta)
+  // Crear nuevo — CUIL (E) vacío; DNI (F) desde checkout (solo alta);
+  // APODO (G) = nickname enviado o primer nombre
   const nextNum = maxNum + 1;
   const newCode = cfg.prefix + nextNum;
   const area = String(customer.area || "").trim();
@@ -535,17 +557,18 @@ function findOrCreateClientCode_(place, customer) {
   const phone = String(customer.phone || "").trim();
   const telefonoCell = phone ? ("CELU: " + phone) : "";
   const dni = readCustomerDni_(customer);
+  const nickname = readCustomerNickname_(customer);
 
   const newRow = Math.max(sheet.getLastRow(), 1) + 1;
   // getRange(row, column, numRows, numColumns) — NO es fila/col final.
-  // getRange(newRow, 1, newRow, 6) pedía newRow filas y rompía altas nuevas.
-  sheet.getRange(newRow, 1, 1, 6).setValues([[
+  sheet.getRange(newRow, 1, 1, CONTACT_COLS).setValues([[
     newCode,
     locality,
     String(customer.name || "").trim(),
     telefonoCell,
     "",  // CUIL (sin AFIP/ARCA)
-    dni
+    dni,
+    nickname
   ]]);
   if (dni) {
     sheet.getRange(newRow, 6).setNumberFormat("@").setValue(dni);
@@ -606,7 +629,7 @@ function listClients_(place) {
     return { error: "place inválido", validPlaces: Object.keys(CONTACT_SHEETS) };
   }
 
-  const cacheKey = "clients_v1_" + place;
+  const cacheKey = "clients_v2_" + place;
   const cached = cacheGetJson_(cacheKey);
   if (cached) return cached;
 
@@ -625,7 +648,7 @@ function listClients_(place) {
     return empty;
   }
 
-  const values = sheet.getRange(1, 1, lastRow, 6).getValues();
+  const values = sheet.getRange(1, 1, lastRow, CONTACT_COLS).getValues();
   const clients = [];
 
   for (let i = 0; i < values.length; i++) {
@@ -637,7 +660,8 @@ function listClients_(place) {
       name: String(values[i][2] || "").trim(),
       phone: String(values[i][3] || "").trim(),
       cuil: String(values[i][4] || "").trim(),
-      dni: String(values[i][5] || "").trim()
+      dni: String(values[i][5] || "").trim(),
+      nickname: String(values[i][6] || "").trim()
     });
   }
 
@@ -979,7 +1003,7 @@ function saveOrder_(orderData) {
   // Invalidar caches de lectura del lugar
   try {
     const cache = CacheService.getScriptCache();
-    cache.remove("clients_v1_" + orderData.place);
+    cache.remove("clients_v2_" + orderData.place);
     cache.remove("orders_v1_" + orderData.place + "_all_");
     if (clientCode) {
       cache.remove("orders_v1_" + orderData.place + "_" + clientCode + "_");

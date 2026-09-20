@@ -156,11 +156,23 @@ function clientPhoneDetailHtml(phone) {
   </dd>`;
 }
 
+/** Primera palabra del nombre, capitalizada ("ANA MONTE VERA" → "Ana"). */
+function firstNameOf(name) {
+  const first = String(name || '').trim().split(/\s+/)[0] || '';
+  if (!first) return '';
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+function clientGreetingName(client) {
+  if (!client) return '';
+  return String(client.nickname || '').trim() || firstNameOf(client.name);
+}
+
 function filterClients(list, q) {
   const needle = String(q || '').trim().toLowerCase();
   if (!needle) return list;
   return list.filter((c) => {
-    const blob = [c.code, c.name, c.phone, c.locality, c.dni].join(' ').toLowerCase();
+    const blob = [c.code, c.name, c.nickname, c.phone, c.locality, c.dni].join(' ').toLowerCase();
     return blob.includes(needle);
   });
 }
@@ -233,6 +245,7 @@ async function openClientDetail(client) {
   card.innerHTML = `
     <div><dt>Código</dt><dd>${escapeHtml(client.code)}</dd></div>
     <div><dt>Nombre</dt><dd>${escapeHtml(client.name || '—')}</dd></div>
+    <div><dt>Apodo</dt><dd>${escapeHtml(client.nickname || '—')}</dd></div>
     <div><dt>Teléfono</dt>${clientPhoneDetailHtml(client.phone)}</div>
     <div><dt>Localidad</dt><dd>${escapeHtml(client.locality || '—')}</dd></div>
     <div><dt>DNI</dt><dd>${escapeHtml(client.dni || '—')}</dd></div>`;
@@ -298,6 +311,7 @@ function resetRemitoForm() {
   setVisible($('#remitoNewFields'), false);
   setVisible($('#remitoExistingWrap'), true);
   $('#remitoName').value = '';
+  $('#remitoNickname').value = '';
   $('#remitoAddress').value = '';
   $('#remitoArea').value = '';
   $('#remitoDni').value = '';
@@ -332,7 +346,11 @@ function fillRemitoFromClient(client) {
   $('#remitoNewClient').checked = false;
   setVisible($('#remitoNewFields'), false);
   setVisible($('#remitoExistingWrap'), true);
-  $('#remitoClientSummary').textContent = `${client.code} — ${client.name || 'Sin nombre'} · ${displayPhone(client.phone)}`;
+  const nick = String(client.nickname || '').trim();
+  const nameLabel = client.name || 'Sin nombre';
+  $('#remitoClientSummary').textContent = nick
+    ? `${client.code} — ${nameLabel} (${nick}) · ${displayPhone(client.phone)}`
+    : `${client.code} — ${nameLabel} · ${displayPhone(client.phone)}`;
   const phone = displayPhone(client.phone);
   const hasPhone = phoneDigits(phone).length >= 8;
   $('#remitoPhone').value = hasPhone ? phone.replace(/^CELU:\s*/i, '') : '';
@@ -589,6 +607,7 @@ function getRemitoCustomer() {
   if (state.remitoIsNewClient || !state.selectedClient) {
     return {
       name: String($('#remitoName').value || '').trim(),
+      nickname: String($('#remitoNickname').value || '').trim(),
       phone,
       address: String($('#remitoAddress').value || '').trim(),
       area: String($('#remitoArea').value || '').trim(),
@@ -599,6 +618,7 @@ function getRemitoCustomer() {
   return {
     clientCode: state.selectedClient.code,
     name: state.selectedClient.name || String($('#remitoName').value || '').trim(),
+    nickname: state.selectedClient.nickname || '',
     phone,
     address: String($('#remitoAddress').value || '').trim() || (state.selectedClient.locality || ''),
     area: String($('#remitoArea').value || '').trim(),
@@ -668,7 +688,7 @@ async function submitRemito() {
   const btn = $('#remitoSubmitBtn');
   const wa = buildRemitoWhatsAppURL({
     clientPhone: customer.phone,
-    clientName: customer.name,
+    clientName: clientGreetingName(customer),
     cart: state.remitoCart,
     subtotal: subGross,
     discountTotal,

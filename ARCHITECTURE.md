@@ -87,7 +87,7 @@ Contacts spreadsheet: `1Pyd9Bll_aa8liMzcrbaMOui15uzq8t-vM7Clu0MMRSY`
 | `santafe` | `DB CONTACTS SF` | `S` |
 | `buenosaires` | `DB CONTACTS BA` | `B` |
 
-Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL (vacío; sin AFIP/ARCA), F DNI (solo al **crear** cliente nuevo en checkout/remito; no se actualiza si ya existe).
+Contacts columns: A código, B localidad/dirección, C nombre, D teléfono (`CELU: …`), E CUIL (vacío; sin AFIP/ARCA), F DNI (solo al **crear** cliente nuevo en checkout/remito; no se actualiza si ya existe), G APODO (al crear: `customer.nickname` / `apodo`, o el primer nombre). `GET ?action=clients` incluye `nickname`. El remito del dashboard saluda por WhatsApp con el apodo; la columna Nombre del sheet de pedidos sigue con el nombre completo.
 
 ## Frontend endpoints (`js/config.js`)
 
@@ -115,7 +115,7 @@ ORDERS_URL      = 'https://script.google.com/macros/s/AKfycbzVDRPPxPN8jQIl5kVfxD
 - URL: `/dashboard.html` (login client-side: user `Anto`, session in `sessionStorage`).
 - Views: clientes (filtro lugar + búsqueda), detalle + pedidos, remito manual, **slider** (por lugar).
 - Slider: máx. 7 slots; imágenes en `imgs/slider/{place}/{n}.jpg` (overwrite); manifiesto `data/{place}/slider.json`; links `none` | `category` | `external`. Escritura vía `ORDERS_URL` (`appscript-pedidos.js` + GitHub Contents API). Requiere `GITHUB_TOKEN` en Script Properties del **proyecto de pedidos** y redeploy del Web App.
-- Remito: arma ítems por código de catálogo → POST `orderData` (con `customer.clientCode` si existe) → `wa.me` al teléfono del cliente (o el que carga Anto).
+- Remito: arma ítems por código de catálogo → POST `orderData` (con `customer.clientCode` si existe) → `wa.me` al teléfono del cliente (o el que carga Anto). El saludo usa `nickname` (col G) o el primer nombre.
 - Auth v1 is **not** secure (hardcoded credentials); harden later.
 
 ## Apps Script (`resources/`)
@@ -155,7 +155,7 @@ On each order:
 - `orderData` → orders (unchanged)
 - `sliderData` → GitHub upsert/meta/remove for place slider (`source: nimu-slider`)
 
-Read cache: `CacheService` ~90s (`clients_v1_*`, `orders_v1_*`).
+Read cache: `CacheService` ~90s (`clients_v2_*`, `orders_v1_*`).
 
 Order columns: `Fecha y Hora`, `CodCliente`, `Nombre`, `Teléfono`, `Dirección`, `Zona`, `Lugar`, `Notas`, `Detalle Producto`, `Codigo Producto`, `Cantidad`, `Precio Unitario`, `Precio Final`, `% Descuento` (sin DNI).
 
@@ -192,7 +192,7 @@ Home search (≥3 chars) filters `search.json` in memory. `doGet?action=search` 
 ### Apps Script `CacheService`
 
 - Catalog API: **5 min** (search etc.).
-- Orders reads: **~90s** (`clients_v1_*`, `orders_v1_*`).
+- Orders reads: **~90s** (`clients_v2_*`, `orders_v1_*`).
 
 ### Static JSON on GitHub
 
