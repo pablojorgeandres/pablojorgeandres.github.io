@@ -321,6 +321,7 @@ function resetRemitoForm() {
   setVisible($('#remitoError'), false);
   $('#remitoProductSearch').value = '';
   $('#remitoQty').value = '1';
+  hideProductSuggest();
   renderRemitoItems();
   syncRemitoZoneSelect();
 }
@@ -400,16 +401,7 @@ async function ensureProductIndex() {
   try {
     state.productIndex = await buildProductCodeIndex(state.place);
     const list = state.productIndex.list || [];
-    const dl = $('#remitoProductList');
-    dl.innerHTML = list
-      .slice(0, 800)
-      .map(
-        (p) =>
-          `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}${
-            p.variant ? ' — ' + escapeHtml(p.variant) : ''
-          }</option>`
-      )
-      .join('');
+    renderProductSuggest();
     status.textContent = list.length
       ? `${list.length} productos con código`
       : 'Catálogo vacío o no publicado en data/ (podés pegar un código si lo conocés)';
@@ -574,14 +566,69 @@ function renderRemitoItems() {
   $('#remitoTotal').textContent = fmt.format(net + ship);
 }
 
-function addRemitoProduct() {
-  const q = $('#remitoProductSearch').value;
-  const qty = Math.max(1, parseInt($('#remitoQty').value, 10) || 1);
-  const found = findProductByQuery(q);
-  if (!found) {
-    appAlert('No encontré ese producto. Probá con el código exacto.');
+let remitoSuggestMatches = [];
+
+function hideProductSuggest() {
+  const ul = $('#remitoProductSuggest');
+  if (!ul) return;
+  ul.hidden = true;
+  ul.innerHTML = '';
+  remitoSuggestMatches = [];
+}
+
+function productSuggestMatches(q) {
+  const list = (state.productIndex && state.productIndex.list) || [];
+  const needle = String(q || '').trim().toLowerCase();
+  if (!needle) return [];
+  const starts = [];
+  const rest = [];
+  for (const p of list) {
+    const code = String(p.code || '').toLowerCase();
+    const name = String(p.name || '').toLowerCase();
+    const variant = String(p.variant || '').toLowerCase();
+    if (code.startsWith(needle)) starts.push(p);
+    else if (code.includes(needle) || name.includes(needle) || variant.includes(needle)) rest.push(p);
+    if (starts.length >= 12) break;
+  }
+  return starts.concat(rest).slice(0, 12);
+}
+
+function renderProductSuggest() {
+  const ul = $('#remitoProductSuggest');
+  const input = $('#remitoProductSearch');
+  if (!ul || !input) return;
+  const q = String(input.value || '').trim();
+  if (!q) {
+    hideProductSuggest();
     return;
   }
+  if (!state.productIndex) {
+    remitoSuggestMatches = [];
+    ul.hidden = false;
+    ul.innerHTML = `<li class="dash-suggest-empty">Cargando catálogo…</li>`;
+    return;
+  }
+  remitoSuggestMatches = productSuggestMatches(q);
+  ul.hidden = false;
+  if (!remitoSuggestMatches.length) {
+    ul.innerHTML = `<li class="dash-suggest-empty">Sin resultados</li>`;
+    return;
+  }
+  ul.innerHTML = remitoSuggestMatches
+    .map(
+      (p, i) => `
+      <li>
+        <button type="button" data-suggest="${i}">
+          <span class="dash-suggest-name">${escapeHtml(p.name)}${p.variant ? ` <span class="muted">(${escapeHtml(p.variant)})</span>` : ''}</span>
+          <span class="remito-item-code">${escapeHtml(p.code)}</span>
+        </button>
+      </li>`
+    )
+    .join('');
+}
+
+function pushRemitoProduct(found) {
+  const qty = Math.max(1, parseInt($('#remitoQty').value, 10) || 1);
   const existing = state.remitoCart.find((i) => i.code.toUpperCase() === found.code.toUpperCase());
   if (existing) existing.qty += qty;
   else {
@@ -599,7 +646,23 @@ function addRemitoProduct() {
   }
   $('#remitoProductSearch').value = '';
   $('#remitoQty').value = '1';
+  hideProductSuggest();
   renderRemitoItems();
+}
+
+function addRemitoProduct() {
+  const q = $('#remitoProductSearch').value;
+  if (!state.productIndex) {
+    appAlert('El catálogo todavía se está cargando.');
+    return;
+  }
+  const found = findProductByQuery(q);
+  if (!found) {
+    renderProductSuggest();
+    appAlert('No encontré ese producto. Probá con el código exacto.');
+    return;
+  }
+  pushRemitoProduct(found);
 }
 
 function getRemitoCustomer() {
@@ -813,11 +876,24 @@ function wireEvents() {
   });
 
   $('#remitoAddProductBtn').addEventListener('click', addRemitoProduct);
+  $('#remitoProductSearch').addEventListener('input', renderProductSuggest);
+  $('#remitoProductSearch').addEventListener('focus', renderProductSuggest);
   $('#remitoProductSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       addRemitoProduct();
+    } else if (e.key === 'Escape') {
+      hideProductSuggest();
     }
+  });
+  const suggest = $('#remitoProductSuggest');
+  suggest.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('[data-suggest]');
+    if (!btn) return;
+    e.preventDefault();
+    const item = remitoSuggestMatches[parseInt(btn.getAttribute('data-suggest'), 10)];
+    if (!item) return;
+    pushRemitoProduct(item);
   });
 
   $('#remitoItemsBody').addEventListener('click', (e) => {

@@ -376,10 +376,64 @@
   align-items: center;
 }
 
-.dash-product-add .dash-search {
+.dash-product-search {
+  position: relative;
   flex: 1;
   min-width: 160px;
+}
+
+.dash-product-add .dash-search {
+  width: 100%;
   max-width: none;
+}
+
+.dash-suggest {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: min(280px, 46vh);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dash-suggest-empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dash-suggest button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dash-suggest button:hover,
+.dash-suggest button:focus {
+  background: rgba(160, 173, 89, 0.12);
+}
+
+.dash-suggest-name {
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .dash-qty {
@@ -974,6 +1028,7 @@
     align-items: stretch;
   }
 
+  .dash-product-search,
   .dash-product-add .dash-search,
   .dash-product-add .dash-qty {
     width: 100%;

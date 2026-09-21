@@ -6,7 +6,7 @@
   <title>Nimú — Dashboard</title>
   <link rel="icon" type="image/jpeg" href="imgs/nimuicon.jpg">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="dashboard.css?v=20">
+  <link rel="stylesheet" href="dashboard.css?v=21">
 </head>
 <body class="dash-body">
   <section id="loginView" class="dash-login">
@@ -130,8 +130,10 @@
           <fieldset class="dash-fieldset">
             <legend>Productos</legend>
             <div class="dash-product-add">
-              <input id="remitoProductSearch" type="search" class="dash-search" placeholder="Buscar por código o nombre…" list="remitoProductList" />
-              <datalist id="remitoProductList"></datalist>
+              <div class="dash-product-search">
+                <input id="remitoProductSearch" type="search" class="dash-search" placeholder="Buscar por código o nombre…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" />
+                <ul id="remitoProductSuggest" class="dash-suggest" hidden></ul>
+              </div>
               <input id="remitoQty" type="number" min="1" value="1" class="dash-qty" aria-label="Cantidad" />
               <button type="button" class="btn primary" id="remitoAddProductBtn">Agregar</button>
             </div>
@@ -196,6 +198,6 @@
   <script src="js/orders-api.js?v=16"></script>
   <script src="js/slider-api.js?v=16"></script>
   <script src="js/whatsapp.js?v=20"></script>
-  <script src="js/dashboard.js?v=20"></script>
+  <script src="js/dashboard.js?v=21"></script>
 </body>
 </html>
