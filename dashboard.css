@@ -396,18 +396,28 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  max-height: min(280px, 46vh);
-  overflow: auto;
+  max-height: min(280px, 40dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
 }
 
-.dash-suggest-empty {
+.dash-suggest-empty,
+.dash-suggest-hint {
   padding: 10px 12px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.dash-suggest-hint {
+  font-size: 0.78rem;
+  padding-bottom: 4px;
 }
 
 .dash-suggest button {
@@ -424,6 +434,7 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .dash-suggest button:hover,

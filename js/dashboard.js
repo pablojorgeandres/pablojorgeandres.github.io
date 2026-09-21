@@ -568,6 +568,10 @@ function renderRemitoItems() {
 
 let remitoSuggestMatches = [];
 
+function suggestNeedsDoubleTap() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 function hideProductSuggest() {
   const ul = $('#remitoProductSuggest');
   if (!ul) return;
@@ -614,7 +618,10 @@ function renderProductSuggest() {
     ul.innerHTML = `<li class="dash-suggest-empty">Sin resultados</li>`;
     return;
   }
-  ul.innerHTML = remitoSuggestMatches
+  const hint = suggestNeedsDoubleTap()
+    ? `<li class="dash-suggest-hint">Doble toque para agregar</li>`
+    : '';
+  ul.innerHTML = hint + remitoSuggestMatches
     .map(
       (p, i) => `
       <li>
@@ -887,13 +894,24 @@ function wireEvents() {
     }
   });
   const suggest = $('#remitoProductSuggest');
-  suggest.addEventListener('pointerdown', (e) => {
+  let lastSuggestTap = { t: 0, idx: -1 };
+  suggest.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-suggest]');
     if (!btn) return;
-    e.preventDefault();
-    const item = remitoSuggestMatches[parseInt(btn.getAttribute('data-suggest'), 10)];
+    const idx = parseInt(btn.getAttribute('data-suggest'), 10);
+    const item = remitoSuggestMatches[idx];
     if (!item) return;
-    pushRemitoProduct(item);
+    if (!suggestNeedsDoubleTap()) {
+      pushRemitoProduct(item);
+      return;
+    }
+    const now = Date.now();
+    if (lastSuggestTap.idx === idx && now - lastSuggestTap.t < 450) {
+      lastSuggestTap = { t: 0, idx: -1 };
+      pushRemitoProduct(item);
+      return;
+    }
+    lastSuggestTap = { t: now, idx };
   });
 
   $('#remitoItemsBody').addEventListener('click', (e) => {
