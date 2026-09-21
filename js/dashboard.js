@@ -423,13 +423,13 @@ function findProductByQuery(q) {
   const codePart = raw.split(/\s+[—\-]/)[0].trim().toUpperCase();
   if (byCode.has(codePart)) return byCode.get(codePart);
 
-  const needle = raw.toLowerCase();
+  const needle = normalizeSearchText(raw);
   return (
     (state.productIndex.list || []).find(
       (p) =>
-        p.code.toLowerCase() === needle ||
-        p.name.toLowerCase().includes(needle) ||
-        `${p.code} ${p.name}`.toLowerCase().includes(needle)
+        normalizeSearchText(p.code) === needle ||
+        normalizeSearchText(p.name).includes(needle) ||
+        normalizeSearchText(`${p.code} ${p.name} ${p.variant || ''}`).includes(needle)
     ) || null
   );
 }
@@ -582,14 +582,14 @@ function hideProductSuggest() {
 
 function productSuggestMatches(q) {
   const list = (state.productIndex && state.productIndex.list) || [];
-  const needle = String(q || '').trim().toLowerCase();
+  const needle = normalizeSearchText(q);
   if (!needle) return [];
   const starts = [];
   const rest = [];
   for (const p of list) {
-    const code = String(p.code || '').toLowerCase();
-    const name = String(p.name || '').toLowerCase();
-    const variant = String(p.variant || '').toLowerCase();
+    const code = normalizeSearchText(p.code);
+    const name = normalizeSearchText(p.name);
+    const variant = normalizeSearchText(p.variant);
     if (code.startsWith(needle)) starts.push(p);
     else if (code.includes(needle) || name.includes(needle) || variant.includes(needle)) rest.push(p);
     if (starts.length >= 12) break;
