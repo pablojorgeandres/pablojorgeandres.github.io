@@ -13,6 +13,8 @@ const state = {
   places: [],
   view: 'clients', // clients | clientDetail | remito | slider
   clients: [],
+  orders: [],
+  ordersPlace: '',
   clientFilter: '',
   selectedClient: null,
   remitoReturnView: 'clients',
@@ -177,21 +179,165 @@ function filterClients(list, q) {
   });
 }
 
-/************ Clients ************/
-async function loadClients() {
-  const status = $('#clientsStatus');
-  status.textContent = 'Cargando clientes…';
-  $('#clientsBody').innerHTML = '';
+function normalizeClientCode(code) {
+  const s = String(code || '').trim();
+  const m = s.match(/^([SBsb])(\d+)$/);
+  if (!m) return s;
+  return m[1].toUpperCase() + m[2];
+}
+
+function formatDashTimestamp(isoString) {
   try {
-    const data = await fetchOrdersApi({ action: 'clients', place: state.place });
-    state.clients = data.clients || [];
-    status.textContent = `${state.clients.length} cliente(s)`;
-    renderClientsTable();
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return String(isoString || '');
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} - ${hours}:${minutes}:${seconds}`;
+  } catch (e) {
+    return String(isoString || '');
+  }
+}
+
+function applyClientsPayload(data, { updating } = {}) {
+  state.clients = (data && data.clients) || [];
+  const status = $('#clientsStatus');
+  if (status) {
+    status.textContent = updating
+      ? `${state.clients.length} cliente(s) · actualizando…`
+      : `${state.clients.length} cliente(s)`;
+  }
+  renderClientsTable();
+}
+
+/************ Clients ************/
+async function loadClients(opts) {
+  const status = $('#clientsStatus');
+  const fresh = !!(opts && opts.fresh);
+  const cacheKey = dashClientsCacheKey(state.place);
+  const cached = !fresh ? getDashCache(cacheKey) : null;
+  if (cached && Array.isArray(cached.clients)) {
+    applyClientsPayload(cached, { updating: true });
+  } else if (status) {
+    status.textContent = 'Cargando clientes…';
+    state.clients = [];
+    if ($('#clientsBody')) $('#clientsBody').innerHTML = '';
+  }
+  try {
+    const data = await fetchOrdersApi({ action: 'clients', place: state.place }, { fresh });
+    setDashCache(cacheKey, data);
+    applyClientsPayload(data);
+    return data;
   } catch (err) {
     console.error(err);
-    status.textContent = 'No se pudieron cargar los clientes. ¿Redeployaste Apps Script?';
+    if (cached && Array.isArray(cached.clients)) {
+      applyClientsPayload(cached);
+      if (status) status.textContent = `${state.clients.length} cliente(s) · sin conexión nueva`;
+      return cached;
+    }
+    if (status) status.textContent = 'No se pudieron cargar los clientes. ¿Redeployaste Apps Script?';
     await appAlert('Error al cargar clientes: ' + (err.message || err));
+    throw err;
   }
+}
+
+async function loadOrders(opts) {
+  const fresh = !!(opts && opts.fresh);
+  const cacheKey = dashOrdersCacheKey(state.place);
+  const cached = !fresh ? getDashCache(cacheKey) : null;
+  if (cached && Array.isArray(cached.orders)) {
+    state.orders = cached.orders;
+    state.ordersPlace = state.place;
+  }
+  try {
+    const data = await fetchOrdersApi({ action: 'orders', place: state.place }, { fresh });
+    state.orders = data.orders || [];
+    state.ordersPlace = state.place;
+    setDashCache(cacheKey, { place: state.place, orders: state.orders });
+    return state.orders;
+  } catch (err) {
+    if (state.ordersPlace === state.place && state.orders.length) return state.orders;
+    throw err;
+  }
+}
+
+function ordersForClient(clientCode) {
+  const needle = normalizeClientCode(clientCode);
+  return (state.orders || []).filter((o) => normalizeClientCode(o.clientCode) === needle);
+}
+
+function renderClientOrders(orders) {
+  const status = $('#ordersStatus');
+  const list = $('#ordersList');
+  if (!list) return;
+  list.innerHTML = '';
+  status.textContent = orders.length
+    ? `${orders.length} pedido(s)`
+    : 'Sin pedidos asociados';
+  orders.forEach((o) => {
+    const el = document.createElement('article');
+    el.className = 'dash-order';
+    const items = (o.items || [])
+      .map((it) => {
+        const line = Number(it.subtotal);
+        const unit = Number(it.unitPrice);
+        const money = Number.isFinite(line)
+          ? line
+          : Number.isFinite(unit)
+            ? unit * (it.qty || 0)
+            : null;
+        const pct = Number(it.discountPct);
+        const extra = [
+          money != null ? fmt.format(money) : '',
+          Number.isFinite(pct) && pct ? `(${pct}%)` : ''
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return `<li>${escapeHtml(it.name || it.code || 'Ítem')}${
+          it.code ? ` <span class="muted">(${escapeHtml(it.code)})</span>` : ''
+        } × ${it.qty || 0}${extra ? ` — ${escapeHtml(extra)}` : ''}</li>`;
+      })
+      .join('');
+    el.innerHTML = `
+      <div class="dash-order-head">
+        <strong>${escapeHtml(o.timestamp || 'Sin fecha')}</strong>
+        <span class="muted">${escapeHtml(o.customer && o.customer.notes ? o.customer.notes : '')}</span>
+      </div>
+      <ul>${items || '<li class="muted">Sin ítems</li>'}</ul>`;
+    list.appendChild(el);
+  });
+}
+
+function optimisticPushOrder(orderData, clientCode) {
+  const order = {
+    timestamp: formatDashTimestamp(orderData.timestamp),
+    clientCode: normalizeClientCode(clientCode) || '',
+    customer: {
+      name: (orderData.customer && orderData.customer.name) || '',
+      phone: (orderData.customer && orderData.customer.phone) || '',
+      address: (orderData.customer && orderData.customer.address) || '',
+      area: (orderData.customer && orderData.customer.area) || '',
+      notes: (orderData.customer && orderData.customer.notes) || ''
+    },
+    placeName: orderData.placeName || '',
+    items: (orderData.items || []).map((it) => ({
+      name: it.name || '',
+      code: it.code || '',
+      qty: it.qty || 0,
+      unitPrice: it.unitPrice != null ? Number(it.unitPrice) : Number(it.price) || 0,
+      subtotal: it.subtotal != null ? Number(it.subtotal) : 0,
+      discountPct: it.discountPct != null ? Number(it.discountPct) : 0
+    }))
+  };
+  if (state.ordersPlace !== state.place) {
+    state.orders = [];
+    state.ordersPlace = state.place;
+  }
+  state.orders = [order, ...(state.orders || [])];
+  setDashCache(dashOrdersCacheKey(state.place), { place: state.place, orders: state.orders });
 }
 
 function renderClientsTable() {
@@ -251,55 +397,33 @@ async function openClientDetail(client) {
     <div><dt>DNI</dt><dd>${escapeHtml(client.dni || '—')}</dd></div>`;
 
   const status = $('#ordersStatus');
-  const list = $('#ordersList');
-  status.textContent = 'Cargando pedidos…';
-  list.innerHTML = '';
+  const hasLocal =
+    state.ordersPlace === state.place && Array.isArray(state.orders) && state.orders.length;
+  const cached = hasLocal ? null : getDashCache(dashOrdersCacheKey(state.place));
+  if (cached && Array.isArray(cached.orders)) {
+    state.orders = cached.orders;
+    state.ordersPlace = state.place;
+  }
+
+  if (state.ordersPlace === state.place && Array.isArray(state.orders)) {
+    renderClientOrders(ordersForClient(client.code));
+  } else if (status) {
+    status.textContent = 'Cargando pedidos…';
+    $('#ordersList').innerHTML = '';
+  }
 
   try {
-    const data = await fetchOrdersApi({
-      action: 'orders',
-      place: state.place,
-      clientCode: client.code
-    });
-    const orders = data.orders || [];
-    status.textContent = orders.length
-      ? `${orders.length} pedido(s)`
-      : 'Sin pedidos asociados';
-    orders.forEach((o) => {
-      const el = document.createElement('article');
-      el.className = 'dash-order';
-      const items = (o.items || [])
-        .map((it) => {
-          const line = Number(it.subtotal);
-          const unit = Number(it.unitPrice);
-          const money = Number.isFinite(line)
-            ? line
-            : Number.isFinite(unit)
-              ? unit * (it.qty || 0)
-              : null;
-          const pct = Number(it.discountPct);
-          const extra = [
-            money != null ? fmt.format(money) : '',
-            Number.isFinite(pct) && pct ? `(${pct}%)` : ''
-          ]
-            .filter(Boolean)
-            .join(' ');
-          return `<li>${escapeHtml(it.name || it.code || 'Ítem')}${
-            it.code ? ` <span class="muted">(${escapeHtml(it.code)})</span>` : ''
-          } × ${it.qty || 0}${extra ? ` — ${escapeHtml(extra)}` : ''}</li>`;
-        })
-        .join('');
-      el.innerHTML = `
-        <div class="dash-order-head">
-          <strong>${escapeHtml(o.timestamp || 'Sin fecha')}</strong>
-          <span class="muted">${escapeHtml(o.customer && o.customer.notes ? o.customer.notes : '')}</span>
-        </div>
-        <ul>${items || '<li class="muted">Sin ítems</li>'}</ul>`;
-      list.appendChild(el);
-    });
+    await loadOrders();
+    if (state.selectedClient && state.selectedClient.code === client.code) {
+      renderClientOrders(ordersForClient(client.code));
+    }
   } catch (err) {
     console.error(err);
-    status.textContent = 'Error al cargar pedidos';
+    if (state.ordersPlace === state.place && state.orders.length) {
+      renderClientOrders(ordersForClient(client.code));
+    } else if (status) {
+      status.textContent = 'Error al cargar pedidos';
+    }
   }
 }
 
@@ -782,6 +906,12 @@ async function submitRemito() {
   try {
     postOrderToSheet(orderData).catch((err) => console.warn('Sheet save error:', err));
 
+    const clientCode =
+      customer.clientCode || (state.selectedClient && state.selectedClient.code) || '';
+    optimisticPushOrder(orderData, clientCode);
+    loadClients({ fresh: true }).catch((err) => console.warn('Refresh clientes:', err));
+    loadOrders({ fresh: true }).catch((err) => console.warn('Refresh pedidos:', err));
+
     // Solo UX: el sheet ya está en camino; no esperamos confirmación de Apps Script
     await new Promise((r) => setTimeout(r, 900));
     btn.textContent = 'Listo ✓';
@@ -845,12 +975,15 @@ function wireEvents() {
     state.placeName = meta ? meta.name : state.place;
     state.selectedClient = null;
     state.productIndex = null;
+    state.clients = [];
+    state.orders = [];
+    state.ordersPlace = '';
     if (state.view === 'slider') {
       await loadSliderEditor();
       return;
     }
     showView('clients');
-    await loadClients();
+    await Promise.all([loadClients(), loadOrders().catch((err) => console.warn(err))]);
   });
 
   $('#clientSearch').addEventListener('input', (e) => {
@@ -1080,7 +1213,7 @@ async function loadSliderEditor() {
   try {
     let slides = [];
     try {
-      const apiData = await fetchSliderDataFromApi(state.place);
+      const apiData = await fetchSliderDataFromApi(state.place, { fresh: true });
       slides = apiData.slides || [];
       state.sliderApiReady = true;
     } catch (apiErr) {
@@ -1290,21 +1423,25 @@ function wireSliderEditor() {
 
 async function bootApp() {
   showApp();
-  await initPlaces();
   wireSliderEditor();
 
   const startView = readPersistedNavView();
   if (startView === 'slider') {
     showView('slider');
-    await loadSliderEditor();
-  } else {
-    showView('clients');
-    await loadClients();
+    await Promise.all([initPlaces(), loadSliderEditor()]);
+    return;
   }
+  showView('clients');
+  await Promise.all([
+    initPlaces(),
+    loadClients(),
+    loadOrders().catch((err) => console.warn(err))
+  ]);
 }
 
 async function init() {
   wireEvents();
+  prefetchDashboardReads(state.place);
   if (isLoggedIn()) await bootApp();
   else showLogin();
 }

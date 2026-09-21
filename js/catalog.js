@@ -121,14 +121,15 @@ async function fetchSliderData(placeId, opts) {
 /**
  * Fresh slider manifesto via pedidos Apps Script (GitHub).
  */
-async function fetchSliderDataFromApi(placeId) {
-  const url = `${ORDERS_URL}?action=slider&place=${encodeURIComponent(placeId)}&t=${Date.now()}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-
-  if (data && data.error) {
-    const actions = data.validActions;
+async function fetchSliderDataFromApi(placeId, opts) {
+  try {
+    const data = await fetchOrdersApi(
+      { action: 'slider', place: placeId },
+      { fresh: !!(opts && opts.fresh) }
+    );
+    return { slides: Array.isArray(data && data.slides) ? data.slides : [] };
+  } catch (apiErr) {
+    const actions = apiErr && apiErr.validActions;
     if (Array.isArray(actions) && !actions.includes('slider')) {
       const err = new Error(
         'El Web App de pedidos no tiene el endpoint slider. Pegá resources/appscript-pedidos.js y redeployá ORDERS_URL.'
@@ -136,13 +137,10 @@ async function fetchSliderDataFromApi(placeId) {
       err.code = 'slider_not_deployed';
       throw err;
     }
-    // Cualquier error de backend (token, permisos UrlFetch, repo, etc.)
-    const err = new Error(data.error);
-    err.code = 'slider_api';
+    const err = new Error((apiErr && apiErr.message) || apiErr);
+    err.code = (apiErr && apiErr.code) || 'slider_api';
     throw err;
   }
-
-  return { slides: Array.isArray(data && data.slides) ? data.slides : [] };
 }
 
 async function fetchProductsData(placeId, category, categoriesData) {

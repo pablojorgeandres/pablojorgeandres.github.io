@@ -33,7 +33,9 @@
 /** CONFIG **/
 const SPREADSHEET_ID = "1-926t3YP4ZEf1xWyGA-IlsDm3JmxNn5eJRd-JayRafs";
 const CONTACTS_SPREADSHEET_ID = "1Pyd9Bll_aa8liMzcrbaMOui15uzq8t-vM7Clu0MMRSY";
-const READ_CACHE_TTL_SEC = 90;
+const READ_CACHE_TTL_SEC = 21600;
+const CACHE_ENTRY_MAX = 90000;
+const CACHE_CHUNK_MAX = 85000;
 
 // Mapeo de lugares a nombres de pestañas de pedidos
 const PLACE_SHEETS = {
@@ -437,7 +439,24 @@ function isValidClientCode_(code) {
 
 function cacheGetJson_(key) {
   try {
-    const raw = CacheService.getScriptCache().get(key);
+    const cache = CacheService.getScriptCache();
+    const metaRaw = cache.get(key + "_meta");
+    if (metaRaw) {
+      const meta = JSON.parse(metaRaw);
+      const n = Number(meta && meta.n) || 0;
+      if (n < 1) return null;
+      const keys = [];
+      for (let i = 0; i < n; i++) keys.push(key + "_" + i);
+      const parts = cache.getAll(keys);
+      let raw = "";
+      for (let i = 0; i < n; i++) {
+        const part = parts[key + "_" + i];
+        if (!part) return null;
+        raw += part;
+      }
+      return JSON.parse(raw);
+    }
+    const raw = cache.get(key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (e) {
@@ -447,13 +466,37 @@ function cacheGetJson_(key) {
 
 function cachePutJson_(key, obj) {
   try {
+    const cache = CacheService.getScriptCache();
     const raw = JSON.stringify(obj);
-    // CacheService max ~100KB per entry; skip if too large
-    if (raw.length > 90000) return;
-    CacheService.getScriptCache().put(key, raw, READ_CACHE_TTL_SEC);
+    if (raw.length <= CACHE_ENTRY_MAX) {
+      cache.put(key, raw, READ_CACHE_TTL_SEC);
+      cache.remove(key + "_meta");
+      return;
+    }
+    const n = Math.ceil(raw.length / CACHE_CHUNK_MAX);
+    const payload = {};
+    payload[key + "_meta"] = JSON.stringify({ n: n });
+    for (let i = 0; i < n; i++) {
+      payload[key + "_" + i] = raw.slice(i * CACHE_CHUNK_MAX, (i + 1) * CACHE_CHUNK_MAX);
+    }
+    cache.putAll(payload, READ_CACHE_TTL_SEC);
   } catch (e) {
     // ignore
   }
+}
+
+function cacheRemove_(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const toRemove = [key, key + "_meta"];
+    const metaRaw = cache.get(key + "_meta");
+    if (metaRaw) {
+      const meta = JSON.parse(metaRaw);
+      const n = Number(meta && meta.n) || 0;
+      for (let i = 0; i < n; i++) toRemove.push(key + "_" + i);
+    }
+    cache.removeAll(toRemove);
+  } catch (e) {}
 }
 
 /**
@@ -659,7 +702,6 @@ function listClients_(place) {
       locality: String(values[i][1] || "").trim(),
       name: String(values[i][2] || "").trim(),
       phone: String(values[i][3] || "").trim(),
-      cuil: String(values[i][4] || "").trim(),
       dni: String(values[i][5] || "").trim(),
       nickname: String(values[i][6] || "").trim()
     });
@@ -764,6 +806,35 @@ function parseOrdersFromRows_(values) {
   return orders;
 }
 
+function readAllOrders_(place) {
+  const cacheKey = "orders_v1_" + place + "_all_";
+  const cached = cacheGetJson_(cacheKey);
+  if (cached && Array.isArray(cached.orders)) return cached;
+
+  const sheetName = PLACE_SHEETS[place];
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    const empty = { place: place, orders: [] };
+    cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) {
+    const empty = { place: place, orders: [] };
+    cachePutJson_(cacheKey, empty);
+    return empty;
+  }
+
+  const values = sheet.getRange(1, 1, lastRow, 14).getValues();
+  const orders = parseOrdersFromRows_(values);
+  orders.reverse();
+  const out = { place: place, orders: orders };
+  cachePutJson_(cacheKey, out);
+  return out;
+}
+
 function listOrders_(place, clientCode, q) {
   const sheetName = PLACE_SHEETS[place];
   if (!sheetName) {
@@ -772,32 +843,8 @@ function listOrders_(place, clientCode, q) {
 
   const codeFilter = clientCode ? normalizeClientCode_(clientCode) : "";
   const qNorm = String(q || "").trim().toLowerCase();
-  const cacheKey =
-    "orders_v1_" + place + "_" + (codeFilter || "all") + "_" + (qNorm || "");
-
-  // Solo cachear listados sin filtro de texto (q cambia mucho)
-  if (!qNorm) {
-    const cached = cacheGetJson_(cacheKey);
-    if (cached) return cached;
-  }
-
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    const empty = { place: place, orders: [] };
-    if (!qNorm) cachePutJson_(cacheKey, empty);
-    return empty;
-  }
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 1) {
-    const empty = { place: place, orders: [] };
-    if (!qNorm) cachePutJson_(cacheKey, empty);
-    return empty;
-  }
-
-  const values = sheet.getRange(1, 1, lastRow, 14).getValues();
-  let orders = parseOrdersFromRows_(values);
+  const all = readAllOrders_(place);
+  let orders = (all.orders || []).slice();
 
   if (codeFilter && isValidClientCode_(codeFilter)) {
     orders = orders.filter(function (o) {
@@ -819,12 +866,45 @@ function listOrders_(place, clientCode, q) {
     });
   }
 
-  // Más recientes primero
-  orders.reverse();
+  return { place: place, orders: orders };
+}
 
-  const out = { place: place, orders: orders };
-  if (!qNorm) cachePutJson_(cacheKey, out);
-  return out;
+function warmCaches_() {
+  const places = Object.keys(CONTACT_SHEETS);
+  places.forEach(function (place) {
+    try {
+      cacheRemove_("clients_v2_" + place);
+      cacheRemove_("orders_v1_" + place + "_all_");
+      listClients_(place);
+      listOrders_(place, "", "");
+    } catch (err) {
+      console.error("warmCaches_ " + place, err);
+    }
+  });
+}
+
+function installWarmTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (t) {
+    if (t.getHandlerFunction() === "warmCaches_") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger("warmCaches_").timeBased().everyMinutes(1).create();
+}
+
+function ensureWarmTrigger_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    if (cache.get("warm_trigger_ok")) return;
+    const triggers = ScriptApp.getProjectTriggers();
+    let found = 0;
+    triggers.forEach(function (t) {
+      if (t.getHandlerFunction() === "warmCaches_") found++;
+    });
+    if (!found) installWarmTrigger();
+    cache.put("warm_trigger_ok", "1", READ_CACHE_TTL_SEC);
+  } catch (e) {}
 }
 
 /**
@@ -832,6 +912,7 @@ function listOrders_(place, clientCode, q) {
  */
 function doGet(e) {
   try {
+    ensureWarmTrigger_();
     const p = (e && e.parameter) || {};
     const action = String(p.action || "").toLowerCase();
     const place = String(p.place || "").toLowerCase();
@@ -1001,14 +1082,11 @@ function saveOrder_(orderData) {
   const clientCode = resolveClientCode_(orderData.place, customer, orderData);
 
   // Invalidar caches de lectura del lugar
-  try {
-    const cache = CacheService.getScriptCache();
-    cache.remove("clients_v2_" + orderData.place);
-    cache.remove("orders_v1_" + orderData.place + "_all_");
-    if (clientCode) {
-      cache.remove("orders_v1_" + orderData.place + "_" + clientCode + "_");
-    }
-  } catch (e) {}
+  cacheRemove_("clients_v2_" + orderData.place);
+  cacheRemove_("orders_v1_" + orderData.place + "_all_");
+  if (clientCode) {
+    cacheRemove_("orders_v1_" + orderData.place + "_" + clientCode + "_");
+  }
 
   // 1. Separador inicial
   sheet.appendRow(EMPTY_ORDER_ROW.slice());

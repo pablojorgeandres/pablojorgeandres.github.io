@@ -71,15 +71,100 @@ function postOrderToSheet(orderData) {
   });
 }
 
-/**
- * Fetch JSON from ORDERS_URL doGet (clients / orders).
- * @param {Record<string,string>} params
- */
-async function fetchOrdersApi(params) {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${ORDERS_URL}?${qs}`);
+const DASH_CLIENTS_CACHE_PREFIX = 'dash_clients_v1__';
+const DASH_ORDERS_CACHE_PREFIX = 'dash_orders_v1__';
+const DASH_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const dashReadInflight = Object.create(null);
+
+function dashClientsCacheKey(place) {
+  return `${DASH_CLIENTS_CACHE_PREFIX}${place}`;
+}
+
+function dashOrdersCacheKey(place) {
+  return `${DASH_ORDERS_CACHE_PREFIX}${place}`;
+}
+
+function getDashCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (!item || !item.timestamp || Date.now() - item.timestamp > DASH_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return item.data;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setDashCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (e) {
+    // quota / private mode
+  }
+}
+
+function throwOrdersApiError(data) {
+  const err = new Error((data && data.error) || 'Error de API');
+  err.payload = data;
+  err.validActions = data && data.validActions;
+  throw err;
+}
+
+async function fetchOrdersJson(url) {
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  if (data && data.error) throw new Error(data.error);
+  if (data && data.error) throwOrdersApiError(data);
   return data;
+}
+
+/**
+ * Fetch JSON from the dashboard read proxy, falling back to ORDERS_URL.
+ * @param {Record<string,string>} params
+ * @param {{fresh?: boolean}} [opts]
+ */
+async function fetchOrdersApi(params, opts) {
+  const qs = new URLSearchParams(params);
+  if (opts && opts.fresh) qs.set('fresh', '1');
+  const query = qs.toString();
+  const inflightKey = query;
+  if (dashReadInflight[inflightKey]) return dashReadInflight[inflightKey];
+
+  const readBase =
+    typeof ORDERS_READ_URL !== 'undefined' && ORDERS_READ_URL ? ORDERS_READ_URL : ORDERS_URL;
+
+  dashReadInflight[inflightKey] = (async () => {
+    try {
+      return await fetchOrdersJson(`${readBase}?${query}`);
+    } catch (err) {
+      if (readBase === ORDERS_URL) throw err;
+      console.warn('Proxy de lectura falló, uso ORDERS_URL:', err);
+      const fallbackQs = new URLSearchParams(params).toString();
+      return await fetchOrdersJson(`${ORDERS_URL}?${fallbackQs}`);
+    } finally {
+      delete dashReadInflight[inflightKey];
+    }
+  })();
+
+  return dashReadInflight[inflightKey];
+}
+
+function prefetchDashboardReads(place) {
+  const p = String(place || 'santafe');
+  fetchOrdersApi({ action: 'clients', place: p })
+    .then((data) => {
+      if (data && Array.isArray(data.clients)) setDashCache(dashClientsCacheKey(p), data);
+    })
+    .catch((err) => console.warn('Prefetch clientes falló', err));
+  fetchOrdersApi({ action: 'orders', place: p })
+    .then((data) => {
+      if (data && Array.isArray(data.orders)) {
+        setDashCache(dashOrdersCacheKey(p), { place: p, orders: data.orders });
+      }
+    })
+    .catch((err) => console.warn('Prefetch pedidos falló', err));
 }

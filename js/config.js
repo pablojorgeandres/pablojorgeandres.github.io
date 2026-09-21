@@ -38,6 +38,8 @@ function withCacheBust(url, v) {
 }
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykFiNmtfbVMKDWhD6JDP-R_R8M-e5wszwfum4eHokTBF3ey9y1eatSiKSPNADx_L47/exec';
 const ORDERS_URL = 'https://script.google.com/macros/s/AKfycbxMNPTt_eiSoS9LIf-gbukhev0lMFdCmNGkJlWoBL0bhkwYlwpm76Df9hRM8DRQF932aw/exec';
+/** Lecturas del dashboard (clients/orders/slider). Escrituras siguen en ORDERS_URL. */
+const ORDERS_READ_URL = 'https://nimu-market.vercel.app/api/dash';
 
 /** Entrega por lugar (retiro o domicilio). */
 const PLACE_ZONE_CONFIG = {
